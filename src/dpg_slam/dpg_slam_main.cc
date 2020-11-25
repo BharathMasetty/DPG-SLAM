@@ -29,6 +29,7 @@
 
 #include <iostream>
 #include <vector>
+#include <memory>
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -53,6 +54,9 @@
 #include "gtsam/nonlinear/GaussNewtonOptimizer.h"
 #include "gtsam/nonlinear/Marginals.h"
 #include "gtsam/nonlinear/Values.h"
+
+#include "dpg_node.h"
+#include "dpg_slam.h"
 
 //#include "config_reader/config_reader.h"
 //#include "shared/math/math_util.h"
@@ -89,7 +93,7 @@ DEFINE_bool(gtsam_test, false, "Run GTSam test");
 DECLARE_int32(v);
 
 bool run_ = true;
-//slam::SLAM slam_;
+std::unique_ptr<dpg_slam::DpgSLAM> slam_;
 ros::Publisher visualization_publisher_;
 ros::Publisher localization_publisher_;
 //VisualizationMsg vis_msg_;
@@ -137,12 +141,12 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
     printf("Laser t=%f\n", msg.header.stamp.toSec());
   }
   last_laser_msg_ = msg;
-//  slam_.ObserveLaser(
-//      msg.ranges,
-//      msg.range_min,
-//      msg.range_max,
-//      msg.angle_min,
-//      msg.angle_max);
+  slam_->ObserveLaser(
+      msg.ranges,
+      msg.range_min,
+      msg.range_max,
+      msg.angle_min,
+      msg.angle_max);
 //  PublishMap();
 //  PublishPose();
 }
@@ -151,10 +155,10 @@ void OdometryCallback(const nav_msgs::Odometry& msg) {
   if (FLAGS_v > 0) {
     printf("Odometry t=%f\n", msg.header.stamp.toSec());
   }
-  //const Vector2f odom_loc(msg.pose.pose.position.x, msg.pose.pose.position.y);
-  //const float odom_angle =
-  //    2.0 * atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
- // slam_.ObserveOdometry(odom_loc, odom_angle);
+  const Vector2f odom_loc(msg.pose.pose.position.x, msg.pose.pose.position.y);
+  const float odom_angle =
+      2.0 * atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
+  slam_->ObserveOdometry(odom_loc, odom_angle);
 }
 
 int gtsam_test(int argc, char** argv) {
@@ -224,12 +228,19 @@ int gtsam_test(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
-//  if (FLAGS_gtsam_test) {
-    return gtsam_test(argc, argv);
-//  }
+
+  // TODO remove this
+  ROS_INFO_STREAM(gtsam_test(argc, argv));
+
   // Initialize ROS.
-//  ros::init(argc, argv, "slam");
-//  ros::NodeHandle n;
+  ros::init(argc, argv, "slam");
+  ros::NodeHandle n;
+
+  // TODO actually initialize
+  dpg_slam::PoseGraphParameters pose_graph_params;
+  dpg_slam::DpgParameters dpg_params;
+
+  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params);
 //  InitializeMsgs();
 
 //  visualization_publisher_ =
@@ -237,15 +248,15 @@ int main(int argc, char** argv) {
 //  localization_publisher_ =
 //      n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
 
-//  ros::Subscriber laser_sub = n.subscribe(
-//      FLAGS_laser_topic.c_str(),
-//      1,
-//      LaserCallback);
-//  ros::Subscriber odom_sub = n.subscribe(
-//      FLAGS_odom_topic.c_str(),
-//      1,
-//      OdometryCallback);
-//  ros::spin();
-//
-//  return 0;
+  ros::Subscriber laser_sub = n.subscribe(
+      FLAGS_laser_topic.c_str(),
+      1,
+      LaserCallback);
+  ros::Subscriber odom_sub = n.subscribe(
+      FLAGS_odom_topic.c_str(),
+      1,
+      OdometryCallback);
+  ros::spin();
+
+  return 0;
 }
