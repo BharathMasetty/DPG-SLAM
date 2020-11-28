@@ -6,7 +6,7 @@ MESSAGE(STATUS "Using compiler: ${CMAKE_CXX_COMPILER}")
 MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}")
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror")
+SET(CMAKE_CXX_FLAGS "-std=c++14 -Wall -Werror")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
@@ -41,6 +41,6 @@ INCLUDE_DIRECTORIES(src)
 INCLUDE_DIRECTORIES(/usr/include/eigen3)
 
 ROSBUILD_ADD_EXECUTABLE(dpg_slam
-                        src/dpg_slam/dpg_slam_main.cc)
+                        src/dpg_slam/dpg_slam_main.cc src/dpg_slam/dpg_slam.cc)
 TARGET_LINK_LIBRARIES(dpg_slam  ${libs} tbb gtsam)
 
