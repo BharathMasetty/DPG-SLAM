@@ -7,6 +7,9 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Geometry>
 
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
 #include "dpg_measurement.h"
 
 namespace dpg_slam {
@@ -14,6 +17,15 @@ namespace dpg_slam {
     class DpgNode {
     public:
 
+        /**
+         * Create the DPG node.
+         *
+         * @param init_pos          Initial position estimate for the node.
+         * @param init_orientation  Initial orientation estimate for the node.
+         * @param pass_number       Number of the pass that the node is part of.
+         * @param node_number       Node number (to be used in factor graph).
+         * @param measurement       Measurement taken at the node.
+         */
         DpgNode(const Eigen::Vector2f &init_pos, const float &init_orientation, const uint32_t &pass_number,
                 const uint32_t &node_number, const Measurement &measurement) : node_loc_(init_pos),
                 node_orientation_(init_orientation), changed_(false), is_active_(true), pass_number_(pass_number),
@@ -49,6 +61,58 @@ namespace dpg_slam {
         void setInactive() {
             is_active_ = false;
         }
+
+        /**
+         * Get the estimated position of the node.
+         * @return
+         */
+        std::pair<Eigen::Vector2f, float> getEstimatedPosition() const {
+            return std::make_pair(node_loc_, node_orientation_);
+        }
+
+        /**
+         * Get the measurement taken at the node.
+         *
+         * TODO should this return a reference instead so we can update the labels of the points in the
+         * measurement and have that change reflected in the node?
+         *
+         * @return Measurement taken at the node.
+         */
+        Measurement getMeasurement() const {
+            return measurement_;
+        }
+
+        /**
+         * Number of the pass that the node belongs to.
+         *
+         * @return Pass number.
+         */
+        uint32_t getPassNumber() const {
+            return pass_number_;
+        }
+
+        /**
+         * Number of the node. Provides identifier in factor graph.
+         *
+         * @return node number.
+         */
+        uint64_t getNodeNumber() const {
+            return node_number_;
+        }
+
+        /**
+         * Get the cached point cloud representing the measurement at the node, with all points relative to the base
+         * link frame (measurement is relative to the laser frame). If the point cloud has not yet been created, it
+         * will be created and cached.
+         *
+         * This contains all points, not just those that are in activated sectors or having a particular label.
+         *
+         * @param laser_pos_rel_base_link   Pose of the laser relative to the base_link.
+         *
+         * @return Point cloud relative to base_link representing the full scan taken at this node.
+         */
+        pcl::PointCloud<pcl::PointXYZ>::Ptr getCachedPointCloudFromNode(
+                const std::pair<Eigen::Vector2f, float> &laser_pos_rel_base_link);
     private:
 
         /**
@@ -86,5 +150,12 @@ namespace dpg_slam {
          * relative to the robot's coordinate frame.
          */
         Measurement measurement_;
+
+        // This has all points in the measurement.
+        // TODO consider refreshing/making other copy with only active points
+        /**
+         * Point cloud relative to base_link representing the full scan at this node.
+         */
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cached_point_cloud_;
     };
-}
+} // end dpg_slam

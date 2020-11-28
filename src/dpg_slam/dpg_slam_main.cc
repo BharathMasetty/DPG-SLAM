@@ -33,8 +33,8 @@
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
-//#include "amrl_msgs/Localization2DMsg.h"
-//#include "amrl_msgs/VisualizationMsg.h"
+#include "amrl_msgs/Localization2DMsg.h"
+#include "amrl_msgs/VisualizationMsg.h"
 #include "gflags/gflags.h"
 #include "geometry_msgs/PoseArray.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
@@ -61,13 +61,12 @@
 //#include "config_reader/config_reader.h"
 //#include "shared/math/math_util.h"
 //#include "shared/math/line2d.h"
-//#include "shared/util/timer.h"
 
 //#include "slam.h"
 //#include "vector_map/vector_map.h"
-//#include "visualization/visualization.h"
+#include "visualization/visualization.h"
 
-//using amrl_msgs::VisualizationMsg;
+using amrl_msgs::VisualizationMsg;
 //using geometry::line2f;
 //using geometry::Line;
 using gtsam::NonlinearFactorGraph;
@@ -79,7 +78,7 @@ using std::endl;
 using std::string;
 using std::vector;
 using Eigen::Vector2f;
-//using visualization::ClearVisualizationMsg;
+using visualization::ClearVisualizationMsg;
 //using visualization::DrawArc;
 //using visualization::DrawPoint;
 //using visualization::DrawLine;
@@ -96,7 +95,7 @@ bool run_ = true;
 std::unique_ptr<dpg_slam::DpgSLAM> slam_;
 ros::Publisher visualization_publisher_;
 ros::Publisher localization_publisher_;
-//VisualizationMsg vis_msg_;
+VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
 
 void InitializeMsgs() {
@@ -104,37 +103,37 @@ void InitializeMsgs() {
   header.frame_id = "map";
   header.seq = 0;
 
-  //vis_msg_ = visualization::NewVisualizationMessage("map", "slam");
+  vis_msg_ = visualization::NewVisualizationMessage("map", "slam");
 }
 
-//void PublishMap() {
-//  static double t_last = 0;
-//  if (GetMonotonicTime() - t_last < 0.5) {
+void PublishMap() {
+  static double t_last = 0;
+  if (ros::Time::now().toSec() - t_last < 0.5) {
     // Rate-limit visualization.
-//    return;
-//  }
-//  t_last = GetMonotonicTime();
-//  vis_msg_.header.stamp = ros::Time::now();
-//  ClearVisualizationMsg(vis_msg_);
+    return;
+  }
+  t_last = ros::Time::now().toSec();
+  vis_msg_.header.stamp = ros::Time::now();
+  ClearVisualizationMsg(vis_msg_);
 
-//  const vector<Vector2f> map = slam_.GetMap();
-//  printf("Map: %lu points\n", map.size());
-//  for (const Vector2f& p : map) {
-//    visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
-//  }
-//  visualization_publisher_.publish(vis_msg_);
-//}
+  const vector<Vector2f> map = slam_->GetMap();
+  printf("Map: %lu points\n", map.size());
+  for (const Vector2f& p : map) {
+    visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
+  }
+  visualization_publisher_.publish(vis_msg_);
+}
 
-//void PublishPose() {
-//  Vector2f robot_loc(0, 0);
-//  float robot_angle(0);
-//  slam_.GetPose(&robot_loc, &robot_angle);
-//  amrl_msgs::Localization2DMsg localization_msg;
-//  localization_msg.pose.x = robot_loc.x();
-//  localization_msg.pose.y = robot_loc.y();
-//  localization_msg.pose.theta = robot_angle;
-//  localization_publisher_.publish(localization_msg);
-//}
+void PublishPose() {
+  Vector2f robot_loc(0, 0);
+  float robot_angle(0);
+  slam_->GetPose(&robot_loc, &robot_angle);
+  amrl_msgs::Localization2DMsg localization_msg;
+  localization_msg.pose.x = robot_loc.x();
+  localization_msg.pose.y = robot_loc.y();
+  localization_msg.pose.theta = robot_angle;
+  localization_publisher_.publish(localization_msg);
+}
 
 void LaserCallback(const sensor_msgs::LaserScan& msg) {
   if (FLAGS_v > 0) {
@@ -147,8 +146,8 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
       msg.range_max,
       msg.angle_min,
       msg.angle_max);
-//  PublishMap();
-//  PublishPose();
+  PublishMap();
+  PublishPose();
 }
 
 void OdometryCallback(const nav_msgs::Odometry& msg) {
@@ -241,12 +240,12 @@ int main(int argc, char** argv) {
   dpg_slam::DpgParameters dpg_params;
 
   slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params);
-//  InitializeMsgs();
+  InitializeMsgs();
 
-//  visualization_publisher_ =
-//      n.advertise<VisualizationMsg>("visualization", 1);
-//  localization_publisher_ =
-//      n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
+  visualization_publisher_ =
+      n.advertise<VisualizationMsg>("visualization", 1);
+  localization_publisher_ =
+      n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
 
   ros::Subscriber laser_sub = n.subscribe(
       FLAGS_laser_topic.c_str(),
