@@ -117,10 +117,11 @@ void PublishMap() {
   ClearVisualizationMsg(vis_msg_);
 
   const vector<Vector2f> map = slam_->GetMap();
-  printf("Map: %lu points\n", map.size());
+//  printf("Map: %lu points\n", map.size());
   for (const Vector2f& p : map) {
     visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
   }
+  slam_->publishTrajectory(vis_msg_);
   visualization_publisher_.publish(vis_msg_);
 }
 
@@ -237,8 +238,7 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "dpg_slam");
   ros::NodeHandle n;
 
-  ROS_INFO_STREAM("HERE 1");
-  // TODO actually initialize
+  // TODO actually initialize params
   dpg_slam::PoseGraphParameters pose_graph_params;
   dpg_slam::DpgParameters dpg_params;
 

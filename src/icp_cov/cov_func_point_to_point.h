@@ -35,7 +35,7 @@ void calculate_ICP_COV(pcl::PointCloud<pcl::PointXYZ>::Ptr data_pi, pcl::PointCl
     a = yaw; b = pitch; c = roll;// important // According to the rotation matrix I used and after verification, it is Yaw Pitch ROLL = [a,b,c]== [R] matrix used in the MatLab also :)
 
     /* Flushing out in the form of XYZ ABC */
-    std::cout << "\nPrinting out [x, y, z, a, b, c] =  " <<x<<"    "<<y<<"    "<<z<<"    "<<a<<"    "<<b<<"    "<<c<<std::endl;
+//    std::cout << "\nPrinting out [x, y, z, a, b, c] =  " <<x<<"    "<<y<<"    "<<z<<"    "<<a<<"    "<<b<<"    "<<c<<std::endl;
 
     //Matrix initialization
     Eigen::MatrixXd d2J_dX2(6,6);
@@ -282,7 +282,7 @@ d2J_dxdc    d2J_dydc    d2J_dzdc   d2J_dadc   d2J_dbdc   d2J_dc2
 
     }// End of the FOR loop!!!
 
-    std::cout << "\n**************\n Successfully Computed d2J_dX2 \n**************\n" << std::endl;
+//    std::cout << "\n**************\n Successfully Computed d2J_dX2 \n**************\n" << std::endl;
 
 
 
@@ -306,7 +306,7 @@ d2J_dxdc    d2J_dydc    d2J_dzdc   d2J_dadc   d2J_dbdc   d2J_dc2
 
     if (n > 200) n = 200;////////////****************************IMPORTANT CHANGE********but may not affect*****************/////////////////////////////////////////
 
-    std::cout << "\nNumber of Correspondences used for ICP's covariance estimation = " << n << std::endl;
+//    std::cout << "\nNumber of Correspondences used for ICP's covariance estimation = " << n << std::endl;
 
     Eigen::MatrixXd d2J_dZdX(6,6*n);
 
@@ -555,18 +555,32 @@ d2J_dxdc    d2J_dydc    d2J_dzdc   d2J_dadc   d2J_dbdc   d2J_dc2
 
 
 
-    Eigen::MatrixXd bigger_icp_cov =  d2J_dX2.inverse() * d2J_dZdX * cov_z * d2J_dZdX.transpose() * d2J_dX2.inverse();
+    // TODO something about this line is causing the GTSAM tutorial thing to hang...? unclear why since this isn't
+    //  called there
+//    Eigen::MatrixXd bigger_icp_cov =  d2J_dX2.inverse() * d2J_dZdX * cov_z * d2J_dZdX.transpose() * d2J_dX2.inverse();
 
     // Output is a 6x6 matrix which is the COVARIANCE of ICP in [x,y,z,a,b,c]
     // [a b c] are Yaw, Pitch and Roll respectively
-    ICP_COV << bigger_icp_cov(0, 0), bigger_icp_cov(0, 1), bigger_icp_cov(0, 3),
-    bigger_icp_cov(1, 0), bigger_icp_cov(1, 1), bigger_icp_cov(1, 3),
-    bigger_icp_cov(3, 0), bigger_icp_cov(3, 1), bigger_icp_cov(3, 3);
+//    ICP_COV << bigger_icp_cov(0, 0), bigger_icp_cov(0, 1), bigger_icp_cov(0, 3),
+//    bigger_icp_cov(1, 0), bigger_icp_cov(1, 1), bigger_icp_cov(1, 3),
+//    bigger_icp_cov(3, 0), bigger_icp_cov(3, 1), bigger_icp_cov(3, 3);
 
-    std::cout << "\n\n********************** \n\n" << "6D ICP_COV = \n" << bigger_icp_cov <<"\n*******************\n\n"<< std::endl;
 
-    std::cout << "\n\n********************** \n\n" << "ICP_COV = \n" << ICP_COV <<"\n*******************\n\n"<< std::endl;
+    // TODO fix this.
+    ROS_INFO_STREAM("Setting output");
+    // TODO probably take the variances from parameters while we're still fixing the main covariance piece.
+    ICP_COV.resize(3, 3);
+    ICP_COV << 1, 0, 0,
+    0, 1, 0,
+    0, 0, 1;
 
-    std::cout << "\nSuccessfully Computed the ICP's Covariance !!!\n" << std::endl;
+
+    ROS_INFO_STREAM("Set ICP cov");
+//
+//    std::cout << "\n\n********************** \n\n" << "6D ICP_COV = \n" << bigger_icp_cov <<"\n*******************\n\n"<< std::endl;
+//
+//    std::cout << "\n\n********************** \n\n" << "ICP_COV = \n" << ICP_COV <<"\n*******************\n\n"<< std::endl;
+//
+//    std::cout << "\nSuccessfully Computed the ICP's Covariance !!!\n" << std::endl;
 }
 

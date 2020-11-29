@@ -14,6 +14,7 @@
 #include <gtsam/slam/PriorFactor.h>
 #include <pcl/impl/point_types.hpp>
 #include <pcl/point_cloud.h>
+#include <amrl_msgs/VisualizationMsg.h>
 
 namespace dpg_slam {
 
@@ -51,15 +52,15 @@ namespace dpg_slam {
 
         // Get latest robot pose.
         void GetPose(Eigen::Vector2f* loc, float* angle) const;
-//
-//        /**
-//         * Add the currently estimated trajectory and the odometry-only estimate to the visualization.
-//         *
-//         * Odometry estimate may not start at the same pose.
-//         *
-//         * @param visualization_msg[out] Visualization message to add trajectory and odometry estimates to.
-//         */
-//        void publishTrajectory(amrl_msgs::VisualizationMsg &visualization_msg);
+
+        /**
+         * Add the currently estimated trajectory and the odometry-only estimate to the visualization.
+         *
+         * Odometry estimate may not start at the same pose.
+         *
+         * @param visualization_msg[out] Visualization message to add trajectory and odometry estimates to.
+         */
+        void publishTrajectory(amrl_msgs::VisualizationMsg &visualization_msg);
 
     private:
 
@@ -67,6 +68,21 @@ namespace dpg_slam {
          * Number of the first pass. Subsequent passes will be incremented by 1.
          */
         const uint32_t kInitialPassNumber = 0;
+
+        /**
+         * Length of the line segment to use when visualizing a pose in the trajectory.
+         */
+        const float kTrajectoryPlotLineSegName = 0.4;
+
+        /**
+         * Color to use when visualizing the SLAM estimated trajectory.
+         */
+        const uint32_t kTrajectoryColor = 0x34b4eb;
+
+        /**
+         * Color to use when visualizing the odometry.
+         */
+        const uint32_t kOdometryEstColor = 0x3400b;
 
         /**
          * List of nodes forming the trajectory.
@@ -122,6 +138,11 @@ namespace dpg_slam {
          * Odometry angle at the last laser scan used.
          */
         float odom_angle_at_last_laser_align_;
+
+        /**
+         * Pose estimates from odometry only. May not be in the same frame as the trajectory estimates.
+         */
+        std::vector<std::pair<Eigen::Vector2f, float>> odom_only_estimates_;
 
         /**
          * Determine if the robot has moved far enough that we should compare the last used laser scan to the current

@@ -79,101 +79,101 @@ namespace dpg_slam {
         laser_orientation_rel_bl_frame_(kDefaultLaserOrientationRelBLFrame) {}
 
         /**
-         * Maximum number of iterations to run ICP for a single transform estimate.
+         * Default maximum number of iterations to run ICP for a single transform estimate.
          */
         const int kDefaultIcpMaximumIterations = 500; // TODO tune
 
         /**
-         * Maximum allowable translation squared difference between transformation estimates for ICP to be considered
-         * converged.
+         * Default maximum allowable translation squared difference between transformation estimates for ICP to be
+         * considered converged.
          *
          * See https://pointclouds.org/documentation/classpcl_1_1_registration.html#aec74ab878cca8d62fd1be9942685a8c1.
          */
-        const double kDefaultIcpMaximumTransformationEpsilon = 0.005; // TODO tune
+        const double kDefaultIcpMaximumTransformationEpsilon = 0.00005; // TODO tune
 
         // TODO should we include this?
         /**
-         * Maximum distance threshold between two correspondent points for ICP to consider them in alignment.
+         * Default maximum distance threshold between two correspondent points for ICP to consider them in alignment.
          *
          * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
          */
-        const double kDefaultIcpMaxCorrespondenceDistance = 0.1; // TODO tune
+        const double kDefaultIcpMaxCorrespondenceDistance = 4.0; // TODO tune
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?
         // euclidean fitness epsilon?
 
         /**
-         * Maximum amount that two nodes can be separated by to try to align their scans.
+         * Default maximum amount that two nodes can be separated by to try to align their scans.
          */
         const float kDefaultMaximumNodeDistScanComparison = 3.0; // TODO tune
 
         /**
-         * Maximum number of iterations for one run of GTSAM estimation.
+         * Default maximum number of iterations for one run of GTSAM estimation.
          */
         const float kDefaultGtsamMaxIterations = 100; // TODO tune
 
         /**
-         * Minimum distance between two consecutive nodes. If the robot's odometry has not estimated a distance
+         * Default minimum distance between two consecutive nodes. If the robot's odometry has not estimated a distance
          * greater than this since the last considered laser scan, we should not add a new node to the pose graph
          * (unless the rotation threshold below has been exceeded).
          */
-        const float kDefaultMinDistBetweenNodes = 1.5; // TODO tune
+        const float kDefaultMinDistBetweenNodes = 0.5; // TODO tune
 
         /**
-         * Minimum angle between two consecutive nodes. If the robot's odometry has not estimated an orientation change
-         * greater than this since the last considered laser scan, we should not add a new node to the pose graph
+         * Default minimum angle between two consecutive nodes. If the robot's odometry has not estimated an orientation
+         * change greater than this since the last considered laser scan, we should not add a new node to the pose graph
          * (unless the translation threshold above has been exceeded).
          */
         const float kDefaultMinAngleBetweenNodes = M_PI_4; // TODO tune
 
         /**
-         * Standard deviation for the x component of the prior put on the first node in a pass.
+         * Default standard deviation for the x component of the prior put on the first node in a pass.
          */
         const float kDefaultNewPassXStdDev = 0.2; // TODO tune
 
         /**
-         * Standard deviation for the y component of the prior put on the first node in a pass.
+         * Default standard deviation for the y component of the prior put on the first node in a pass.
          */
         const float kDefaultNewPassYStdDev = 0.2; // TODO tune
 
         /**
-         * Standard deviation for the theta component of the prior put on the first node in a pass.
+         * Default standard deviation for the theta component of the prior put on the first node in a pass.
          */
         const float kDefaultNewPassThetaStdDev = 0.15; // TODO tune
 
         /**
-         * Multiplier for translational error from translation (used in odometry constraints).
+         * Default multiplier for translational error from translation (used in odometry constraints).
          */
         const float kDefaultMotionModelTranslErrorFromTransl = 0.05; // TODO tune
 
         /**
-         * Multiplier for translational error from rotation (used in odometry constraints).
+         * Default multiplier for translational error from rotation (used in odometry constraints).
          */
         const float kDefaultMotionModelTranslErrorFromRot = 0.05; // TODO tune
 
         /**
-         * Multiplier for rotational error from translation (used in odometry constraints).
+         * Default multiplier for rotational error from translation (used in odometry constraints).
          */
         const float kDefaultMotionModelRotErrorFromTransl = 0.05; // TODO tune
 
         /**
-         * Multiplier for rotational error from rotation (used in odometry constraints).
+         * Default multiplier for rotational error from rotation (used in odometry constraints).
          */
         const float kDefaultMotionModelRotErrorFromRot = 0.05; // TODO tune
 
         /**
-         * X coordinate of the lidar in the base_link frame.
+         * Default x coordinate of the lidar in the base_link frame.
          */
         const float kDefaultLaserXInBLFrame = 0.2;
 
         /**
-         * Y coordinate of the lidar in the base_link frame.
+         * Default y coordinate of the lidar in the base_link frame.
          */
         const float kDefaultLaserYInBLFrame = 0.0;
 
         /**
-         * Orientation of the lidar relative to the base link frame.
+         * Default orientation of the lidar relative to the base link frame.
          */
         const float kDefaultLaserOrientationRelBLFrame = 0.0;
 
