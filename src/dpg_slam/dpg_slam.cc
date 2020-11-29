@@ -131,7 +131,7 @@ namespace dpg_slam {
             noiseModel::Diagonal::shared_ptr odometryNoise =
                     noiseModel::Diagonal::Sigmas(Vector3(transl_std_dev , transl_std_dev, rot_std_dev));
             Pose2 odometry_offset_est(odom_est_loc_displ.x(), odom_est_loc_displ.y(), odom_est_angle_displ);
-//            graph_->add(BetweenFactor<Pose2>(dpg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
+            graph_->add(BetweenFactor<Pose2>(dpg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
 
             odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
             odom_loc_at_last_laser_align_ = prev_odom_loc_;
@@ -159,15 +159,20 @@ namespace dpg_slam {
         // Add constraints for non-successive scans
         // TODO should we limit how many connections we make here (i.e. if we connect 2 and 8,
         //  don't also connect 3 and 8?)
-//        for (size_t i = 0; i < dpg_nodes_.size() - 1; i++) {
-//            DpgNode node = dpg_nodes_[i];
-//            if ((node.getEstimatedPosition().first - new_node.getEstimatedPosition().first).norm()
-//            <= pose_graph_parameters_.maximum_node_dist_scan_comparison_) {
-//                std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset =
-//                        runIcp(node, new_node);
-//                addObservationConstraint(node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
-//            }
-//        }
+        for (size_t i = 0; i < dpg_nodes_.size() - 1; i++) {
+            DpgNode node = dpg_nodes_[i];
+            if ((node.getEstimatedPosition().first - new_node.getEstimatedPosition().first).norm()
+            <= pose_graph_parameters_.maximum_node_dist_scan_comparison_) {
+                ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
+                node.getEstimatedPosition().first.x() << ", " << node.getEstimatedPosition().first.y() << ", " << node.getEstimatedPosition().second << " and node "
+                << new_node.getNodeNumber() << " at " << new_node.getEstimatedPosition().first.x() << ", " <<
+                new_node.getEstimatedPosition().first.y() << ", " << new_node.getEstimatedPosition().second);
+                std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset =
+                        runIcp(node, new_node);
+                ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", " << non_successive_scan_offset.first.first.y() << ", " << non_successive_scan_offset.first.second);
+                addObservationConstraint(node.getNodeNumber(), new_node.getNodeNumber(), non_successive_scan_offset);
+            }
+        }
 
         dpg_nodes_.push_back(new_node);
 
@@ -187,8 +192,8 @@ namespace dpg_slam {
         optimization_params.maxIterations = pose_graph_parameters_.gtsam_max_iterations_;
         // TODO do we need other params here?
         Values result = LevenbergMarquardtOptimizer(*graph_, init_estimates, optimization_params).optimize();
-//        init_estimates.print("Initial estimates");
-//        result.print("Results");
+        init_estimates.print("Initial estimates");
+        result.print("Results");
 
         for (DpgNode &dpg_node : dpg_nodes_) {
 
@@ -203,6 +208,7 @@ namespace dpg_slam {
         Pose2 factor_transl(constraint_info.first.first.x(), constraint_info.first.first.y(),
                             constraint_info.first.second);
         noiseModel::Gaussian::shared_ptr factor_noise = noiseModel::Gaussian::Covariance(constraint_info.second);
+        ROS_INFO_STREAM("Adding constraint from node " << from_node_num << " to node " << to_node_num <<" factor " << factor_transl.x() << ", " << factor_transl.y() << ", " << factor_transl.theta());
         graph_->add(BetweenFactor<Pose2>(from_node_num, to_node_num, factor_transl, factor_noise));
     }
 

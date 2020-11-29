@@ -81,7 +81,7 @@ namespace dpg_slam {
         /**
          * Default maximum number of iterations to run ICP for a single transform estimate.
          */
-        const int kDefaultIcpMaximumIterations = 500; // TODO tune
+        const int kDefaultIcpMaximumIterations = 1000; // TODO tune
 
         /**
          * Default maximum allowable translation squared difference between transformation estimates for ICP to be
@@ -97,7 +97,7 @@ namespace dpg_slam {
          *
          * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
          */
-        const double kDefaultIcpMaxCorrespondenceDistance = 0.2; // TODO tune
+        const double kDefaultIcpMaxCorrespondenceDistance = 0.6; // TODO tune
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?
@@ -118,14 +118,14 @@ namespace dpg_slam {
          * greater than this since the last considered laser scan, we should not add a new node to the pose graph
          * (unless the rotation threshold below has been exceeded).
          */
-        const float kDefaultMinDistBetweenNodes = 0.5; // TODO tune
+        const float kDefaultMinDistBetweenNodes = 1.0; // TODO tune
 
         /**
          * Default minimum angle between two consecutive nodes. If the robot's odometry has not estimated an orientation
          * change greater than this since the last considered laser scan, we should not add a new node to the pose graph
          * (unless the translation threshold above has been exceeded).
          */
-        const float kDefaultMinAngleBetweenNodes = M_PI_4; // TODO tune
+        const float kDefaultMinAngleBetweenNodes = M_PI / 8; // TODO tune
 
         /**
          * Default standard deviation for the x component of the prior put on the first node in a pass.
@@ -145,22 +145,22 @@ namespace dpg_slam {
         /**
          * Default multiplier for translational error from translation (used in odometry constraints).
          */
-        const float kDefaultMotionModelTranslErrorFromTransl = 0.05; // TODO tune
+        const float kDefaultMotionModelTranslErrorFromTransl = 0.5; // TODO tune
 
         /**
          * Default multiplier for translational error from rotation (used in odometry constraints).
          */
-        const float kDefaultMotionModelTranslErrorFromRot = 0.05; // TODO tune
+        const float kDefaultMotionModelTranslErrorFromRot = 0.5; // TODO tune
 
         /**
          * Default multiplier for rotational error from translation (used in odometry constraints).
          */
-        const float kDefaultMotionModelRotErrorFromTransl = 0.05; // TODO tune
+        const float kDefaultMotionModelRotErrorFromTransl = 0.5; // TODO tune
 
         /**
          * Default multiplier for rotational error from rotation (used in odometry constraints).
          */
-        const float kDefaultMotionModelRotErrorFromRot = 0.05; // TODO tune
+        const float kDefaultMotionModelRotErrorFromRot = 0.5; // TODO tune
 
         /**
          * Default x coordinate of the lidar in the base_link frame.
