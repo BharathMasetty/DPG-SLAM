@@ -89,7 +89,7 @@ namespace dpg_slam {
          *
          * See https://pointclouds.org/documentation/classpcl_1_1_registration.html#aec74ab878cca8d62fd1be9942685a8c1.
          */
-        const double kDefaultIcpMaximumTransformationEpsilon = 0.00005; // TODO tune
+        const double kDefaultIcpMaximumTransformationEpsilon = 0.000000005; // TODO tune
 
         // TODO should we include this?
         /**
@@ -97,7 +97,7 @@ namespace dpg_slam {
          *
          * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
          */
-        const double kDefaultIcpMaxCorrespondenceDistance = 4.0; // TODO tune
+        const double kDefaultIcpMaxCorrespondenceDistance = 0.2; // TODO tune
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?

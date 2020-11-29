@@ -112,10 +112,9 @@ namespace dpg_slam {
             }
 
             // Get the estimated position change since the last node due to odometry
-            Vector2f unrotated_odom_est_loc_displ = prev_odom_loc_ - odom_loc_at_last_laser_align_;
-            float odom_est_angle_displ = math_utils::AngleDiff(prev_odom_angle_, odom_angle_at_last_laser_align_);
-            Eigen::Rotation2Df rotate(-1 * odom_angle_at_last_laser_align_);
-            Vector2f odom_est_loc_displ = rotate * unrotated_odom_est_loc_displ;
+            std::pair<Vector2f, float> relative_loc_latest_pose = math_utils::inverseTransformPoint(prev_odom_loc_, prev_odom_angle_, odom_loc_at_last_laser_align_, odom_angle_at_last_laser_align_);
+            Vector2f odom_est_loc_displ = relative_loc_latest_pose.first;
+            float odom_est_angle_displ = relative_loc_latest_pose.second;
 
             // Create the node with the initial position estimate as the last node's position plus the odom
             DpgNode new_node = createRelativePositionedNode(ranges, range_min, range_max, angle_min, angle_max,
@@ -132,7 +131,7 @@ namespace dpg_slam {
             noiseModel::Diagonal::shared_ptr odometryNoise =
                     noiseModel::Diagonal::Sigmas(Vector3(transl_std_dev , transl_std_dev, rot_std_dev));
             Pose2 odometry_offset_est(odom_est_loc_displ.x(), odom_est_loc_displ.y(), odom_est_angle_displ);
-            graph_->add(BetweenFactor<Pose2>(dpg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
+//            graph_->add(BetweenFactor<Pose2>(dpg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
 
             odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
             odom_loc_at_last_laser_align_ = prev_odom_loc_;
@@ -149,6 +148,8 @@ namespace dpg_slam {
     void DpgSLAM::updatePoseGraphObsConstraints(DpgNode &new_node) {
 
         DpgNode preceding_node = dpg_nodes_.back();
+
+        ROS_INFO_STREAM("Preceding node pos " << preceding_node.getEstimatedPosition().first.x() << ", " << preceding_node.getEstimatedPosition().first.y() << ", " << preceding_node.getEstimatedPosition().second);
 
         // Add laser factor for previous pose and this node
         std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset =
@@ -186,8 +187,8 @@ namespace dpg_slam {
         optimization_params.maxIterations = pose_graph_parameters_.gtsam_max_iterations_;
         // TODO do we need other params here?
         Values result = LevenbergMarquardtOptimizer(*graph_, init_estimates, optimization_params).optimize();
-        init_estimates.print("Initial estimates");
-        result.print("Results");
+//        init_estimates.print("Initial estimates");
+//        result.print("Results");
 
         for (DpgNode &dpg_node : dpg_nodes_) {
 
@@ -213,10 +214,15 @@ namespace dpg_slam {
 
     std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> DpgSLAM::runIcp(DpgNode &node_1, DpgNode &node_2) {
 
-        Vector2f unrotated_displ_est = node_2.getEstimatedPosition().first - node_1.getEstimatedPosition().first;
-        float est_angle_displ = math_utils::AngleDiff(node_2.getEstimatedPosition().second, node_1.getEstimatedPosition().second);
-        Eigen::Rotation2Df rotate(-1 * est_angle_displ);
-        Vector2f est_loc_displ = rotate * unrotated_displ_est;
+        std::pair<Vector2f, float> node_2_in_node_1 =
+                math_utils::inverseTransformPoint(node_2.getEstimatedPosition().first,
+                                                  node_2.getEstimatedPosition().second,
+                                                  node_1.getEstimatedPosition().first,
+                                                  node_1.getEstimatedPosition().second);
+        Vector2f est_loc_displ = node_2_in_node_1.first;
+        float est_angle_displ = node_2_in_node_1.second;
+//        ROS_INFO_STREAM("Rotated displ est " << est_loc_displ.x() << ", " << est_loc_displ.y());
+//        ROS_INFO_STREAM("Est angle displ " << est_angle_displ);
 
         Matrix4f transform_guess;
         transform_guess << cos(est_angle_displ), -sin(est_angle_displ), 0, est_loc_displ.x(),
@@ -310,7 +316,8 @@ namespace dpg_slam {
             prev_node_est_position = dpg_nodes_.back().getEstimatedPosition();
         }
         std::pair<Vector2f, float> est_pos = math_utils::transformPoint(odom_displacement,
-                odom_orientation_change,prev_node_est_position.first, prev_node_est_position.second);
+                odom_orientation_change, prev_node_est_position.first, prev_node_est_position.second);
+        ROS_INFO_STREAM("New node est pos " << est_pos.first.x() << ", " << est_pos.first.y() << ", " << est_pos.second);
         uint32_t node_number = dpg_nodes_.size();
         return createNode(ranges, range_min, range_max, angle_min, angle_max, est_pos.first, est_pos.second,
                           pass_number, node_number);
