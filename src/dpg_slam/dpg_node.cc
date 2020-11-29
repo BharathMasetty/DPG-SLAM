@@ -6,7 +6,7 @@ namespace dpg_slam {
     pcl::PointCloud<pcl::PointXYZ>::Ptr DpgNode::getCachedPointCloudFromNode(
             const std::pair<Eigen::Vector2f, float> &laser_pos_rel_base_link) {
         // TODO verify all of this - currently totally untested
-        if (cached_point_cloud_->empty()) {
+        if (cached_point_cloud_ == NULL) {
             pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
             cloud->width = measurement_.getMeasurements().size();
             cloud->resize(measurement_.getMeasurements().size());

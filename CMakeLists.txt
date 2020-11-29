@@ -37,6 +37,8 @@ ADD_LIBRARY(shared_library
 
 #ADD_SUBDIRECTORY(src/shared)
 #INCLUDE_DIRECTORIES(src/shared)
+INCLUDE_DIRECTORIES(src)
+INCLUDE_DIRECTORIES(/usr/include/eigen3)
 
 find_package(PCL 1.3 REQUIRED)
 

@@ -207,7 +207,9 @@ int gtsam_test(int argc, char** argv) {
   parameters.relativeErrorTol = 1e-5;
   // Do not perform more than N iteration steps
   parameters.maxIterations = 100;
+  parameters.verbosity = GaussNewtonParams::Verbosity::VALUES;
   // Create the optimizer ...
+  ROS_ERROR_STREAM("Optimizing");
   gtsam::GaussNewtonOptimizer optimizer(graph, initialEstimate, parameters);
   // ... and optimize
   gtsam::Values result = optimizer.optimize();
@@ -232,9 +234,10 @@ int main(int argc, char** argv) {
   ROS_INFO_STREAM(gtsam_test(argc, argv));
 
   // Initialize ROS.
-  ros::init(argc, argv, "slam");
+  ros::init(argc, argv, "dpg_slam");
   ros::NodeHandle n;
 
+  ROS_INFO_STREAM("HERE 1");
   // TODO actually initialize
   dpg_slam::PoseGraphParameters pose_graph_params;
   dpg_slam::DpgParameters dpg_params;
@@ -255,6 +258,7 @@ int main(int argc, char** argv) {
       FLAGS_odom_topic.c_str(),
       1,
       OdometryCallback);
+  ROS_INFO_STREAM("Spinning");
   ros::spin();
 
   return 0;

@@ -12,6 +12,16 @@ namespace dpg_slam {
     class DpgParameters {
     public:
 
+        // TODO set the rest of the params, maybe make them loadable via rosparam server
+        DpgParameters() : num_sectors_(kDefaultNumSectors){
+
+        }
+
+        /**
+         * Default value for the number of sectors.
+         */
+        const uint8_t kDefaultNumSectors = 5;
+
         // TODO Should these be set via constructor or via rosparam retreiver
 
         // TODO note where these are referenced in the paper
@@ -52,7 +62,120 @@ namespace dpg_slam {
     class PoseGraphParameters {
     public:
 
-        // TODO set these
+        // TODO need to make laser offset configurable based on robot
+        // May also want to make some of these loadable from rosparam server
+        PoseGraphParameters() : icp_maximum_iterations_(kDefaultIcpMaximumIterations),
+        icp_maximum_transformation_epsilon_(kDefaultIcpMaximumTransformationEpsilon),
+        icp_max_correspondence_distance_(kDefaultIcpMaxCorrespondenceDistance),
+        maximum_node_dist_scan_comparison_(kDefaultMaximumNodeDistScanComparison),
+        gtsam_max_iterations_(kDefaultGtsamMaxIterations), min_dist_between_nodes_(kDefaultMinDistBetweenNodes),
+        min_angle_between_nodes_(kDefaultMinAngleBetweenNodes), new_pass_x_std_dev_(kDefaultNewPassXStdDev),
+        new_pass_y_std_dev_(kDefaultNewPassYStdDev), new_pass_theta_std_dev_(kDefaultNewPassThetaStdDev),
+        motion_model_transl_error_from_transl_(kDefaultMotionModelTranslErrorFromTransl),
+        motion_model_transl_error_from_rot_(kDefaultMotionModelTranslErrorFromRot),
+        motion_model_rot_error_from_transl_(kDefaultMotionModelRotErrorFromTransl),
+        motion_model_rot_error_from_rot_(kDefaultMotionModelRotErrorFromRot),
+        laser_x_in_bl_frame_(kDefaultLaserXInBLFrame), laser_y_in_bl_frame_(kDefaultLaserYInBLFrame),
+        laser_orientation_rel_bl_frame_(kDefaultLaserOrientationRelBLFrame) {}
+
+        /**
+         * Maximum number of iterations to run ICP for a single transform estimate.
+         */
+        const int kDefaultIcpMaximumIterations = 500; // TODO tune
+
+        /**
+         * Maximum allowable translation squared difference between transformation estimates for ICP to be considered
+         * converged.
+         *
+         * See https://pointclouds.org/documentation/classpcl_1_1_registration.html#aec74ab878cca8d62fd1be9942685a8c1.
+         */
+        const double kDefaultIcpMaximumTransformationEpsilon = 0.005; // TODO tune
+
+        // TODO should we include this?
+        /**
+         * Maximum distance threshold between two correspondent points for ICP to consider them in alignment.
+         *
+         * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
+         */
+        const double kDefaultIcpMaxCorrespondenceDistance = 0.1; // TODO tune
+
+        // TODO want to have any of the following for ICP
+        // ICP RANSAC outlier rejection threshold?
+        // euclidean fitness epsilon?
+
+        /**
+         * Maximum amount that two nodes can be separated by to try to align their scans.
+         */
+        const float kDefaultMaximumNodeDistScanComparison = 3.0; // TODO tune
+
+        /**
+         * Maximum number of iterations for one run of GTSAM estimation.
+         */
+        const float kDefaultGtsamMaxIterations = 100; // TODO tune
+
+        /**
+         * Minimum distance between two consecutive nodes. If the robot's odometry has not estimated a distance
+         * greater than this since the last considered laser scan, we should not add a new node to the pose graph
+         * (unless the rotation threshold below has been exceeded).
+         */
+        const float kDefaultMinDistBetweenNodes = 1.5; // TODO tune
+
+        /**
+         * Minimum angle between two consecutive nodes. If the robot's odometry has not estimated an orientation change
+         * greater than this since the last considered laser scan, we should not add a new node to the pose graph
+         * (unless the translation threshold above has been exceeded).
+         */
+        const float kDefaultMinAngleBetweenNodes = M_PI_4; // TODO tune
+
+        /**
+         * Standard deviation for the x component of the prior put on the first node in a pass.
+         */
+        const float kDefaultNewPassXStdDev = 0.2; // TODO tune
+
+        /**
+         * Standard deviation for the y component of the prior put on the first node in a pass.
+         */
+        const float kDefaultNewPassYStdDev = 0.2; // TODO tune
+
+        /**
+         * Standard deviation for the theta component of the prior put on the first node in a pass.
+         */
+        const float kDefaultNewPassThetaStdDev = 0.15; // TODO tune
+
+        /**
+         * Multiplier for translational error from translation (used in odometry constraints).
+         */
+        const float kDefaultMotionModelTranslErrorFromTransl = 0.05; // TODO tune
+
+        /**
+         * Multiplier for translational error from rotation (used in odometry constraints).
+         */
+        const float kDefaultMotionModelTranslErrorFromRot = 0.05; // TODO tune
+
+        /**
+         * Multiplier for rotational error from translation (used in odometry constraints).
+         */
+        const float kDefaultMotionModelRotErrorFromTransl = 0.05; // TODO tune
+
+        /**
+         * Multiplier for rotational error from rotation (used in odometry constraints).
+         */
+        const float kDefaultMotionModelRotErrorFromRot = 0.05; // TODO tune
+
+        /**
+         * X coordinate of the lidar in the base_link frame.
+         */
+        const float kDefaultLaserXInBLFrame = 0.2;
+
+        /**
+         * Y coordinate of the lidar in the base_link frame.
+         */
+        const float kDefaultLaserYInBLFrame = 0.0;
+
+        /**
+         * Orientation of the lidar relative to the base link frame.
+         */
+        const float kDefaultLaserOrientationRelBLFrame = 0.0;
 
         /**
          * Maximum number of iterations to run ICP for a single transform estimate.

@@ -13,7 +13,7 @@ namespace dpg_slam {
     DpgSLAM::DpgSLAM(const DpgParameters &dpg_parameters,
                      const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters),
                      pose_graph_parameters_(pose_graph_parameters), pass_number_(kInitialPassNumber),
-                     first_scan_for_pass_(true) {
+                     odom_initialized_(false), first_scan_for_pass_(true) {
 
         graph_ = new NonlinearFactorGraph();
     }
@@ -49,11 +49,13 @@ namespace dpg_slam {
         // the previous. Instead have a loose constraint relating it to 0, 0, 0.
         bool no_prev_odom_ = false;
         if (first_scan_for_pass_) {
-            first_scan_for_pass_ = true;
+            first_scan_for_pass_ = false;
             no_prev_odom_ = true;
         }
 
         if (no_prev_odom_) {
+
+            ROS_INFO_STREAM("First node for pass");
 
             // Add prior instead of odom
             DpgNode new_node = createNewPassFirstNode(ranges, range_min, range_max, angle_min, angle_max,
@@ -86,12 +88,15 @@ namespace dpg_slam {
             if (!shouldProcessLaser()) {
                 return false;
             }
+            ROS_INFO_STREAM("Processing non-first laser");
 
             // Get the estimated position change since the last node due to odometry
             Vector2f unrotated_odom_est_loc_displ = prev_odom_loc_ - odom_loc_at_last_laser_align_;
             float odom_est_angle_displ = math_utils::AngleDiff(prev_odom_angle_, odom_angle_at_last_laser_align_);
             Eigen::Rotation2Df rotate(-1 * prev_odom_angle_);
             Vector2f odom_est_loc_displ = rotate * unrotated_odom_est_loc_displ;
+
+            ROS_INFO_STREAM("Creating non-first node");
 
             // Create the node with the initial position estimate as the last node's position plus the odom
             DpgNode new_node = createRelativePositionedNode(ranges, range_min, range_max, angle_min, angle_max,
@@ -104,6 +109,7 @@ namespace dpg_slam {
             float rot_std_dev = (pose_graph_parameters_.motion_model_rot_error_from_transl_ * (odom_est_loc_displ.norm())) +
                                 (pose_graph_parameters_.motion_model_rot_error_from_rot_ * fabs(odom_est_angle_displ));
 
+            ROS_INFO_STREAM("Creating odometry factor");
             // TODO should x and y standard deviation be different?
             noiseModel::Diagonal::shared_ptr odometryNoise =
                     noiseModel::Diagonal::Sigmas(Vector3(transl_std_dev , transl_std_dev, rot_std_dev));
@@ -113,6 +119,7 @@ namespace dpg_slam {
             odom_loc_at_last_laser_align_ = prev_odom_loc_;
             odom_angle_at_last_laser_align_ = prev_odom_angle_;
 
+            ROS_INFO_STREAM("Creating observation factors");
             // Add observation constraints
             updatePoseGraphObsConstraints(new_node);
         }
