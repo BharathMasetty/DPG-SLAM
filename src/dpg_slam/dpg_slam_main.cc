@@ -65,6 +65,7 @@
 //#include "slam.h"
 //#include "vector_map/vector_map.h"
 #include "visualization/visualization.h"
+#include <std_msgs/Empty.h>
 
 using amrl_msgs::VisualizationMsg;
 //using geometry::line2f;
@@ -87,6 +88,8 @@ using visualization::ClearVisualizationMsg;
 // Create command line arguements
 DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
 DEFINE_string(odom_topic, "/odom", "Name of ROS topic for odometry data");
+DEFINE_string(new_pass_topic, "/new_pass", "Name of ROS topic that when we've received a message indicates we're on a "
+                                           "new pass");
 DEFINE_bool(gtsam_test, false, "Run GTSam test");
 
 DECLARE_int32(v);
@@ -159,6 +162,11 @@ void OdometryCallback(const nav_msgs::Odometry& msg) {
   const float odom_angle =
       2.0 * atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
   slam_->ObserveOdometry(odom_loc, odom_angle);
+}
+
+void NewPassCallback(const std_msgs::Empty &msg) {
+    ROS_INFO_STREAM("New pass!");
+    slam_->incrementPassNumber();
 }
 
 int gtsam_test(int argc, char** argv) {
@@ -258,6 +266,10 @@ int main(int argc, char** argv) {
       FLAGS_odom_topic.c_str(),
       1,
       OdometryCallback);
+  ros::Subscriber new_pass_sub = n.subscribe(
+          FLAGS_new_pass_topic.c_str(),
+          1,
+          NewPassCallback);
   ROS_INFO_STREAM("Spinning");
   ros::spin();
 
