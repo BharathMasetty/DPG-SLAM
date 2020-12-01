@@ -43,12 +43,18 @@ namespace dpg_slam {
 	/**
      	 * Convert the dpg_node to ints based on resolution for occupancy grid.
          */
-        std::pair<int32_t, int32_t> convertToKeyForm(const DpgNode& node) const;
+        cellKey convertToKeyForm(const Eigen::Vector2f& loc) const;
 		
 	/*
 	 * To fill in the occupancy grid based on input node vectors 
 	 */
 	void calculateOccupancyGrid();
+
+	/*
+	 * For converting measurement point at a node to map frame
+	 */
+	std::vector<cellKey> convertLaserRangeToCellKey(const DpgNode& node);
+    		
 	
 	/*
 	 * Nodes for which the occupancy grid is to be made.
@@ -64,6 +70,11 @@ namespace dpg_slam {
 	 * DPG Parameters
 	 */
 	DpgParameters dpg_parameters_;
+
+	/**
+         * Pose graph parameters.
+         */
+        PoseGraphParameters pose_graph_parameters_;
     };
 
     /**

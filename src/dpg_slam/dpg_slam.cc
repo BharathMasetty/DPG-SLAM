@@ -445,9 +445,11 @@ namespace dpg_slam {
     std::vector<occupancyGrid> DpgSLAM::computeLocalSubMap(){
         std::vector<occupancyGrid> grids;
 
-        //TODO: Fill in the occupancy grid data structure
-        //TODO: Implement Section 3A from the paper to fill in both the grids.
-        //TODO: Bharath
+        //TODO: get Latest N nodes
+        //TODO: get FOC nodes from last runs 
+	//TODO: Create grids
+	//TODO: Verify for coverage
+        //TODO: return Grids
         return grids;
     }
 
@@ -474,17 +476,44 @@ namespace dpg_slam {
     }
 
     void occupancyGrid::calculateOccupancyGrid(){
-
-        //TODO: Bharath 
+	
+	// Filling up the occupancy grid for each node.
+      	for(uint32_t i=0; i<Nodes_.size(); i++){
+		std::vector<cellKey> occupiedCells = convertLaserRangeToCellKey(Nodes_[i]);
+		for (uint32_t j=0; j<occupiedCells.size(); j++){
+			gridInfo[occupiedCells[i]] = true;		
+		}
+	}
     }
 
-    std::pair<int, int> occupancyGrid::convertToKeyForm(const DpgNode& node) const {
-	Eigen::Vector2f loc = node.getEstimatedPosition().first;
+    cellKey occupancyGrid::convertToKeyForm(const Eigen::Vector2f& loc) const {
 	int key_form_x = round(loc.x() / dpg_parameters_.occ_grid_resolution_);
         int key_form_y = round(loc.y() / dpg_parameters_.occ_grid_resolution_); 
     	
-	std::pair<int, int> cell_loc = std::make_pair(key_form_x, key_form_y);
+	cellKey cell_loc = std::make_pair(key_form_x, key_form_y);
 	return cell_loc;
+    }
+
+    std::vector<cellKey> occupancyGrid::convertLaserRangeToCellKey(const DpgNode& node){
+    	
+	Measurement laserMeasurement = node.getMeasurement();
+	std::vector<MeasurementPoint> scan = laserMeasurement.getMeasurements();
+	std::pair<Eigen::Vector2f, float> nodeLocInfo = node.getEstimatedPosition();
+	Eigen::Vector2f baseLinkPosition = nodeLocInfo.first;
+	float nodeAngle = nodeLocInfo.second;
+	std::vector<cellKey> occupiedCells;
+	float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
+	float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
+	
+	// converting each measurement to globle frame and identifying the cellKey
+	for (uint32_t i = 0; i<scan.size();  i++){
+		float range = scan[i].getRange();
+		float angle = scan[i].getAngle();
+		Eigen::Vector2f pointLocation(range*cos(angle)+LaserX, range*sin(angle)+LaserY);
+		cellKey cell = convertToKeyForm(pointLocation);
+		occupiedCells.push_back(cell);
+	}	
+	return occupiedCells;
     }
 
 }
