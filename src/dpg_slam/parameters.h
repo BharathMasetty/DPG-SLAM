@@ -122,6 +122,9 @@ namespace dpg_slam {
             node_handle.param(kMotionModelTranslErrorFromRotParamName, motion_model_transl_error_from_rot_, kDefaultMotionModelTranslErrorFromRot);
             node_handle.param(kMotionModelRotErrorFromTranslParamName, motion_model_rot_error_from_transl_, kDefaultMotionModelRotErrorFromTransl);
             node_handle.param(kMotionModelRotErrorFromRotParamName, motion_model_rot_error_from_rot_, kDefaultMotionModelRotErrorFromRot);
+            node_handle.param(kLaserXInBLFrameParamName, laser_x_in_bl_frame_, kDefaultLaserXInBLFrame);
+            node_handle.param(kLaserYInBLFrameParamName, laser_y_in_bl_frame_, kDefaultLaserYInBLFrame);
+            node_handle.param(kLaserOrientationInBLFrameParamName, laser_orientation_rel_bl_frame_, kDefaultLaserOrientationRelBLFrame);
         }
 
         /**
@@ -132,7 +135,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the maximum number of iterations to run ICP for a single transform estimate.
          */
-        const std::string kIcpMaximumIterationsParamName = "icp_maximum_iterations";
+        static constexpr const char *kIcpMaximumIterationsParamName = "icp_maximum_iterations";
 
         /**
          * Default maximum allowable translation squared difference between transformation estimates for ICP to be
@@ -146,7 +149,7 @@ namespace dpg_slam {
          * ROS Param Name for the maximum allowable translation squared difference between transformation estimates for
          * ICP to be considered converged.
          */
-        const std::string kIcpMaximumTransformationEpsilonParamName = "icp_maximum_transformation_epsilon_param_name";
+        static constexpr const char *kIcpMaximumTransformationEpsilonParamName = "icp_maximum_transformation_epsilon_param_name";
 
         // TODO should we include this?
         /**
@@ -160,7 +163,7 @@ namespace dpg_slam {
          * ROS Param Name for the maximum distance threshold between two correspondent points for ICP to consider them
          * in alignment.
          */
-        const std::string kIcpMaxCorrespondenceDistanceParamName = "icp_max_correspondence_distance_param_name";
+        static constexpr const char* kIcpMaxCorrespondenceDistanceParamName = "icp_max_correspondence_distance_param_name";
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?
@@ -176,7 +179,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the number of iterations to run RANSAC during ICP.
          */
-        const std::string kRansacIterationsParamName = "ransac_iterations";
+        static constexpr const char *kRansacIterationsParamName = "ransac_iterations";
 
         /**
          * Default configuration for using reciprocal correspondences in ICP.
@@ -186,7 +189,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the configuration for using reciprocal correspondences in ICP.
          */
-        const std::string kIcpUseReciprocalCorrespondences = "icp_use_reciprocal_correspondences";
+        static constexpr const char *kIcpUseReciprocalCorrespondences = "icp_use_reciprocal_correspondences";
 
         /**
          * Default maximum amount that two nodes can be separated by to try to align their scans.
@@ -196,7 +199,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the maximum amount that two nodes can be separated by to try to align their scans.
          */
-        const std::string kMaximumNodeDistScanComparisonParamName = "maximum_node_dist_scan_comparison_param_name";
+        static constexpr const char *kMaximumNodeDistScanComparisonParamName = "maximum_node_dist_scan_comparison_param_name";
 
         /**
          * Default maximum number of iterations for one run of GTSAM estimation.
@@ -213,7 +216,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the minimum distance between two consecutive nodes.
          */
-        const std::string kMinDistBetweenNodesParamName = "min_distance_between_nodes";
+        static constexpr const char *kMinDistBetweenNodesParamName = "min_distance_between_nodes";
 
         /**
          * Default minimum angle between two consecutive nodes. If the robot's odometry has not estimated an orientation
@@ -225,7 +228,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the minimum angle between two consecutive nodes.
          */
-        const std::string kMinAngleBetweenNodesParamName = "min_angle_between_nodes";
+        static constexpr const char *kMinAngleBetweenNodesParamName = "min_angle_between_nodes";
 
         /**
          * Default standard deviation for the x component of the prior put on the first node in a pass.
@@ -247,25 +250,40 @@ namespace dpg_slam {
          */
         const float kDefaultMotionModelTranslErrorFromTransl = 0.4; // TODO tune
 
-        const std::string kMotionModelTranslErrorFromTranslParamName = "motion_transl_from_transl";
+        /**
+         * ROS param name for the multiplier for translational error from translation (used in odometry constraints).
+         */
+        static constexpr const char *kMotionModelTranslErrorFromTranslParamName = "motion_transl_from_transl";
 
         /**
          * Default multiplier for translational error from rotation (used in odometry constraints).
          */
         const float kDefaultMotionModelTranslErrorFromRot = 0.4; // TODO tune
-        const std::string kMotionModelTranslErrorFromRotParamName = "motion_transl_from_rot";
+
+        /**
+         * ROS param name for the multiplier for translational error from rotation (used in odometry constraints).
+         */
+        static constexpr const char *kMotionModelTranslErrorFromRotParamName = "motion_transl_from_rot";
 
         /**
          * Default multiplier for rotational error from translation (used in odometry constraints).
          */
         const float kDefaultMotionModelRotErrorFromTransl = 0.4; // TODO tune
-        const std::string kMotionModelRotErrorFromTranslParamName = "motion_rot_from_transl";
+
+        /**
+         * ROS param name for the multiplier for rotational error from translation (used in odometry constraints).
+         */
+        static constexpr const char *kMotionModelRotErrorFromTranslParamName = "motion_rot_from_transl";
 
         /**
          * Default multiplier for rotational error from rotation (used in odometry constraints).
          */
         const float kDefaultMotionModelRotErrorFromRot = 0.4; // TODO tune
-        const std::string kMotionModelRotErrorFromRotParamName = "motion_rot_from_rot";
+
+        /**
+         * ROS param name for the multiplier for rotational error from rotation (used in odometry constraints).
+         */
+        static constexpr const char *kMotionModelRotErrorFromRotParamName = "motion_rot_from_rot";
 
         /**
          * Default x coordinate of the lidar in the base_link frame.
@@ -273,9 +291,19 @@ namespace dpg_slam {
         const float kDefaultLaserXInBLFrame = 0.2;
 
         /**
+         * ROS param name for the x coordinate of the lidar in the base_link frame.
+         */
+        static constexpr const char *kLaserXInBLFrameParamName = "laser_x_in_bl_frame";
+
+        /**
          * Default y coordinate of the lidar in the base_link frame.
          */
         const float kDefaultLaserYInBLFrame = 0.0;
+
+        /**
+         * ROS param name for the y coordinate of the lidar in the base_link frame.
+         */
+        static constexpr const char *kLaserYInBLFrameParamName = "laser_y_in_bl_frame";
 
         /**
          * Default orientation of the lidar relative to the base link frame.
@@ -283,9 +311,14 @@ namespace dpg_slam {
         const float kDefaultLaserOrientationRelBLFrame = 0.0;
 
         /**
+         * ROS param name for the orientation of the lidar relative to the base link frame.
+         */
+        static constexpr const char *kLaserOrientationInBLFrameParamName = "laser_orientation_in_bl_frame";
+
+        /**
          * ROS Param Name for the configuration for adding constraints between non-successive scans.
          */
-        const std::string kNonSuccessiveScanConstraintsParamName = "non_successive_scan_constraints";
+        static constexpr const char *kNonSuccessiveScanConstraintsParamName = "non_successive_scan_constraints";
 
         /**
          * Default configuration for adding constraints between non-successive scans.
@@ -295,7 +328,7 @@ namespace dpg_slam {
         /**
          * ROS Param Name for the configuration for adding constraints from the wheel odometry.
          */
-        const std::string kOdometryConstraintsParamName = "odometry_constraints";
+        static constexpr const char *kOdometryConstraintsParamName = "odometry_constraints";
 
         /**
          * Default configuration for adding constraints from the wheel odometry.
@@ -305,7 +338,7 @@ namespace dpg_slam {
         /**
          * ROS Param name for the variance in the x dimension to use in laser constraints.
          */
-        const std::string kLaserXVarianceParamName = "laser_x_variance";
+        static constexpr const char *kLaserXVarianceParamName = "laser_x_variance";
 
         /**
          * Default value for the variance in the x dimension to use in laser constraints.
@@ -315,7 +348,7 @@ namespace dpg_slam {
         /**
          * ROS Param name for the variance in the y dimension to use in laser constraints.
          */
-        const std::string kLaserYVarianceParamName = "laser_y_variance";
+        static constexpr const char *kLaserYVarianceParamName = "laser_y_variance";
 
         /**
          * Default value for the variance in the y dimension to use in laser constraints.
@@ -325,7 +358,7 @@ namespace dpg_slam {
         /**
          * ROS Param name for the variance in the theta dimension to use in laser constraints.
          */
-        const std::string kLaserThetaVarianceParamName = "laser_theta_variance";
+        static constexpr const char *kLaserThetaVarianceParamName = "laser_theta_variance";
 
         /**
          * Default value for the variance in the theta dimension to use in laser constraints.
