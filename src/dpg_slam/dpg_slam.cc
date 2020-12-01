@@ -4,7 +4,6 @@
 #include "icp_cov/cov_func_point_to_point.h"
 
 #include <visualization/visualization.h>
-
 #include <ros/ros.h>
 
 using namespace gtsam;
@@ -443,15 +442,54 @@ namespace dpg_slam {
     }
 
     std::vector<occupancyGrid> DpgSLAM::computeLocalSubMap(){
-        std::vector<occupancyGrid> grids;
+	
+	// Grid of current Pose chain
+	std::vector<DpgNode> currPoseChain(dpg_nodes_.end() - dpg_parameters_.current_pose_chain_len_, dpg_nodes_.end());
+	occupancyGrid currGrid(currPoseChain);
 
-        //TODO: get Latest N nodes
-        //TODO: get FOC nodes from last runs 
-	//TODO: Create grids
-	//TODO: Verify for coverage
-        //TODO: return Grids
+	// Grid for FOV nodes
+	std::vector<DpgNode> fovNodes = getNodesCoveringCurrGrid(currGrid);
+	occupancyGrid subMapGrid(fovNodes);
+
+	std::vector<occupancyGrid> grids{currGrid, subMapGrid};
         return grids;
     }
+	
+    std::vector<DpgNode> DpgSLAM::getNodesCoveringCurrGrid(const occupancyGrid& currGrid) {
+    	std::vector<DpgNode> FovNodes;
+	// Search space for nodes
+	std::vector<DpgNode> previousNodes(dpg_nodes_.begin(), dpg_nodes_.end() - kNumNodesInCurrentPass);
+	
+	// Check if any cell intersects with FOV of a node in the search space.
+	for (uint32_t i=0; i<previousNodes.size(); i++) {
+		std::vector<DpgNode> searchNode{previousNodes[i]};
+		occupancyGrid FOV(searchNode);
+		bool isFOVIntersecting = checkGridIntersection(FOV, currGrid);
+		if (isFOVIntersecting) {
+			FovNodes.push_back(previousNodes[i]);
+		}
+	}
+	return FovNodes;
+    }
+
+    bool DpgSLAM::checkGridIntersection(const occupancyGrid &Grid1, const occupancyGrid &Grid2) {
+	
+	// Comparing if the any of the cells in Grid1 and Grid2 intersect. If so, this returns true otherwise false.
+	bool isIntersectionFound = false;
+	for (const std::pair<cellKey, bool> &cell1Info : Grid1.gridInfo){
+		cellKey cell1 = cell1Info.first;
+		for (const std::pair<cellKey, bool> &cell2Info : Grid2.gridInfo){
+			cellKey cell2 = cell2Info.first;
+			if (cell1.first == cell2.first && cell1.second==cell2.second) isIntersectionFound = true;
+			if (isIntersectionFound) {
+				return isIntersectionFound;
+			}	
+		}
+	}
+	return isIntersectionFound;
+    }
+
+
 
     std::vector<dpgMapPoint> DpgSLAM::detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid){
 
@@ -478,9 +516,10 @@ namespace dpg_slam {
     void occupancyGrid::calculateOccupancyGrid(){
 	
 	// Filling up the occupancy grid for each node.
-      	for(uint32_t i=0; i<Nodes_.size(); i++){
+	for(uint32_t i=0; i<Nodes_.size(); i++){
 		std::vector<cellKey> occupiedCells = convertLaserRangeToCellKey(Nodes_[i]);
 		for (uint32_t j=0; j<occupiedCells.size(); j++){
+				
 			gridInfo[occupiedCells[i]] = true;		
 		}
 	}
@@ -495,24 +534,22 @@ namespace dpg_slam {
     }
 
     std::vector<cellKey> occupancyGrid::convertLaserRangeToCellKey(const DpgNode& node){
-    	
-	Measurement laserMeasurement = node.getMeasurement();
-	std::vector<MeasurementPoint> scan = laserMeasurement.getMeasurements();
-	std::pair<Eigen::Vector2f, float> nodeLocInfo = node.getEstimatedPosition();
+        DpgNode node_ = node;
+	std::pair<Eigen::Vector2f, float> nodeLocInfo = node_.getEstimatedPosition();
 	Eigen::Vector2f baseLinkPosition = nodeLocInfo.first;
 	float nodeAngle = nodeLocInfo.second;
 	std::vector<cellKey> occupiedCells;
 	float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
 	float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
+	float LaserAngle = pose_graph_parameters_.laser_orientation_rel_bl_frame_;
+	pcl::PointCloud<pcl::PointXYZ>::Ptr scan = node_.getCachedPointCloudFromNode(std::make_pair(Eigen::Vector2f(LaserX, LaserY), LaserAngle));
 	
-	// converting each measurement to globle frame and identifying the cellKey
-	for (uint32_t i = 0; i<scan.size();  i++){
-		float range = scan[i].getRange();
-		float angle = scan[i].getAngle();
-		Eigen::Vector2f pointLocation(range*cos(angle)+LaserX, range*sin(angle)+LaserY);
+	for (pcl::PointXYZ point : *scan) {
+                Vector2f bl_point(point.x, point.y);
+		Eigen::Vector2f pointLocation(math_utils::transformPoint(bl_point, 0, baseLinkPosition, nodeAngle).first);
 		cellKey cell = convertToKeyForm(pointLocation);
-		occupiedCells.push_back(cell);
-	}	
+                occupiedCells.push_back(cell);
+            }	
 	return occupiedCells;
     }
 
