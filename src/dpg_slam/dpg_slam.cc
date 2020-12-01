@@ -13,10 +13,11 @@ using namespace Eigen;
 namespace dpg_slam {
 
     DpgSLAM::DpgSLAM(const DpgParameters &dpg_parameters,
-                     const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters),
-                     pose_graph_parameters_(pose_graph_parameters), pass_number_(kInitialPassNumber),
-                     odom_initialized_(false), first_scan_for_pass_(true) {
-
+                     const PoseGraphParameters &pose_graph_parameters,
+                     const VisualizationParams &visualization_parameters) : dpg_parameters_(dpg_parameters),
+                     pose_graph_parameters_(pose_graph_parameters), visualization_params_(visualization_parameters),
+                     pass_number_(kInitialPassNumber), odom_initialized_(false), first_scan_for_pass_(true),
+                     cumulative_dist_since_laser_laser_align_(0.0) {
         graph_ = new NonlinearFactorGraph();
     }
 
@@ -131,7 +132,9 @@ namespace dpg_slam {
             noiseModel::Diagonal::shared_ptr odometryNoise =
                     noiseModel::Diagonal::Sigmas(Vector3(transl_std_dev , transl_std_dev, rot_std_dev));
             Pose2 odometry_offset_est(odom_est_loc_displ.x(), odom_est_loc_displ.y(), odom_est_angle_displ);
-            graph_->add(BetweenFactor<Pose2>(dpg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
+            if (pose_graph_parameters_.odometry_constraints_) {
+                graph_->add(BetweenFactor<Pose2>(dpg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
+            }
 
             odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
             odom_loc_at_last_laser_align_ = prev_odom_loc_;
@@ -159,21 +162,35 @@ namespace dpg_slam {
         // Add constraints for non-successive scans
         // TODO should we limit how many connections we make here (i.e. if we connect 2 and 8,
         //  don't also connect 3 and 8?)
-        for (size_t i = 0; i < dpg_nodes_.size() - 1; i++) {
-            DpgNode node = dpg_nodes_[i];
-            if ((node.getEstimatedPosition().first - new_node.getEstimatedPosition().first).norm()
-            <= pose_graph_parameters_.maximum_node_dist_scan_comparison_) {
-                ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
-                node.getEstimatedPosition().first.x() << ", " << node.getEstimatedPosition().first.y() << ", " << node.getEstimatedPosition().second << " and node "
-                << new_node.getNodeNumber() << " at " << new_node.getEstimatedPosition().first.x() << ", " <<
-                new_node.getEstimatedPosition().first.y() << ", " << new_node.getEstimatedPosition().second);
-                std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset =
-                        runIcp(node, new_node);
-                ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", " << non_successive_scan_offset.first.first.y() << ", " << non_successive_scan_offset.first.second);
-                addObservationConstraint(node.getNodeNumber(), new_node.getNodeNumber(), non_successive_scan_offset);
+
+        if (pose_graph_parameters_.non_successive_scan_constraints_) {
+            if (dpg_nodes_.size() > 1) {
+                for (size_t i = 0; i < std::max((size_t) 0, dpg_nodes_.size() - 2); i++) {
+                    DpgNode node = dpg_nodes_[i];
+                    if ((node.getEstimatedPosition().first - preceding_node.getEstimatedPosition().first).norm()
+                    <= pose_graph_parameters_.maximum_node_dist_scan_comparison_) {
+                        ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
+                                                                     node.getEstimatedPosition().first.x() << ", "
+                                                                     << node.getEstimatedPosition().first.y() << ", "
+                                                                     << node.getEstimatedPosition().second
+                                                                     << " and node "
+                                                                     << preceding_node.getNodeNumber() << " at "
+                                                                     << preceding_node.getEstimatedPosition().first.x()
+                                                                     << ", "
+                                                                     << preceding_node.getEstimatedPosition().first.y()
+                                                                     << ", "
+                                                                     << preceding_node.getEstimatedPosition().second);
+                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset =
+                                runIcp(node, preceding_node);
+                        ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", "
+                                                            << non_successive_scan_offset.first.first.y() << ", "
+                                                            << non_successive_scan_offset.first.second);
+                        addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
+                                                 non_successive_scan_offset);
+                    }
+                }
             }
         }
-
         dpg_nodes_.push_back(new_node);
 
         // Get initial estimates for each node based on their current estimated position
@@ -192,8 +209,8 @@ namespace dpg_slam {
         optimization_params.maxIterations = pose_graph_parameters_.gtsam_max_iterations_;
         // TODO do we need other params here?
         Values result = LevenbergMarquardtOptimizer(*graph_, init_estimates, optimization_params).optimize();
-        init_estimates.print("Initial estimates");
-        result.print("Results");
+//        init_estimates.print("Initial estimates");
+//        result.print("Results");
 
         for (DpgNode &dpg_node : dpg_nodes_) {
 
@@ -245,6 +262,10 @@ namespace dpg_slam {
         // Just going to set z coord to 0
         pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
 
+        ROS_INFO_STREAM("Ransac default iterations " << icp.getRANSACIterations());
+        ROS_INFO_STREAM("Ransac rejection " << icp.getRANSACOutlierRejectionThreshold());
+        ROS_INFO_STREAM("Use reciprocal correspondences " << icp.getUseReciprocalCorrespondences());
+
         // TODO are these in the right order or should they be swapped
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud = node_1.getCachedPointCloudFromNode(
                 getLaserPositionRelativeToBaselink());
@@ -258,10 +279,13 @@ namespace dpg_slam {
         icp.setMaximumIterations(pose_graph_parameters_.icp_maximum_iterations_);
         icp.setTransformationEpsilon(pose_graph_parameters_.icp_maximum_transformation_epsilon_);
         icp.setMaxCorrespondenceDistance(pose_graph_parameters_.icp_max_correspondence_distance_);
+        icp.setRANSACIterations(pose_graph_parameters_.ransac_iterations_);
+        icp.setUseReciprocalCorrespondences(pose_graph_parameters_.icp_use_reciprocal_correspondences_);
 
         pcl::PointCloud<pcl::PointXYZ> icp_output_cloud;
         icp.align(icp_output_cloud, transform_guess);
         Eigen::Matrix4f est_transform = icp.getFinalTransformation();
+
         if (est_transform(2, 3) != 0.0) {
             // TODO may want to check equality within some small bound rather than exact equality
             ROS_WARN_STREAM("Z estimate for transform was not 0, but was " << est_transform(2, 3));
@@ -365,8 +389,11 @@ namespace dpg_slam {
             odom_initialized_ = true;
         }
 
+        cumulative_dist_since_laser_laser_align_ += (odom_loc - prev_odom_loc_).norm();
+
         prev_odom_angle_ = odom_angle;
         prev_odom_loc_ = odom_loc;
+
     }
 
     void DpgSLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
@@ -401,6 +428,7 @@ namespace dpg_slam {
 
         // Reconstruct the map as a single aligned point cloud from all saved poses
         // and their respective scans.
+        int point_num = 0;
         for (size_t i = 0; i < dpg_nodes_.size(); i++) {
             DpgNode node = dpg_nodes_[i];
             pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud = node.getCachedPointCloudFromNode(
@@ -408,8 +436,11 @@ namespace dpg_slam {
 
             std::pair<Vector2f, float> node_pose = node.getEstimatedPosition();
             for (pcl::PointXYZ point : *point_cloud) {
-                Vector2f bl_point(point.x, point.y);
-                map.push_back(math_utils::transformPoint(bl_point, 0, node_pose.first, node_pose.second).first);
+                if ((point_num % visualization_params_.display_points_fraction_) == 0) {
+                    Vector2f bl_point(point.x, point.y);
+                    map.push_back(math_utils::transformPoint(bl_point, 0, node_pose.first, node_pose.second).first);
+                }
+                point_num++;
             }
         }
         return map;
@@ -418,10 +449,10 @@ namespace dpg_slam {
     bool DpgSLAM::shouldProcessLaser() {
 
         float angle_diff = math_utils::AngleDist(prev_odom_angle_, odom_angle_at_last_laser_align_);
-        float loc_diff = (prev_odom_loc_ - odom_loc_at_last_laser_align_).norm();
 
-        if ((loc_diff > pose_graph_parameters_.min_dist_between_nodes_)
+        if ((cumulative_dist_since_laser_laser_align_ > pose_graph_parameters_.min_dist_between_nodes_)
         || (angle_diff > pose_graph_parameters_.min_angle_between_nodes_)) {
+            cumulative_dist_since_laser_laser_align_ = 0.0;
             return true;
         }
 

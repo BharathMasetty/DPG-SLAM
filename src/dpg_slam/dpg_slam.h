@@ -16,6 +16,7 @@
 #include <pcl/point_cloud.h>
 #include <amrl_msgs/VisualizationMsg.h>
 
+
 namespace dpg_slam {
 
     class DpgSLAM {
@@ -24,10 +25,12 @@ namespace dpg_slam {
         /**
          * Create the DPG SLAM object.
          *
-         * @param dpg_parameters        DPG specific parameters.
-         * @param pose_graph_parameters Pose graph parameters.
+         * @param dpg_parameters            DPG specific parameters.
+         * @param pose_graph_parameters     Pose graph parameters.
+         * @param visualization_parameters  Visualization parameters.
          */
-        DpgSLAM(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters);
+        DpgSLAM(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters,
+                const VisualizationParams &visualization_parameters);
 
         // Observe a new laser scan.
         void ObserveLaser(const std::vector<float>& ranges,
@@ -105,6 +108,11 @@ namespace dpg_slam {
         PoseGraphParameters pose_graph_parameters_;
 
         /**
+         * Visualization params.
+         */
+        VisualizationParams visualization_params_;
+
+        /**
          * Pass number that the robot is currently on.
          */
         uint32_t pass_number_;
@@ -138,6 +146,13 @@ namespace dpg_slam {
          * Odometry angle at the last laser scan used.
          */
         float odom_angle_at_last_laser_align_;
+
+        /**
+         * Total distance that the car has moved since the last laser alignment.
+         *
+         * This is needed because comparing positions didn't deal with 3-point-turn-like maneuvers well.
+         */
+        float cumulative_dist_since_laser_laser_align_;
 
         /**
          * Pose estimates from odometry only. May not be in the same frame as the trajectory estimates.
