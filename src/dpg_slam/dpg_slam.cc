@@ -155,8 +155,11 @@ namespace dpg_slam {
         ROS_INFO_STREAM("Preceding node pos " << preceding_node.getEstimatedPosition().first.x() << ", " << preceding_node.getEstimatedPosition().first.y() << ", " << preceding_node.getEstimatedPosition().second);
 
         // Add laser factor for previous pose and this node
-        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset =
-                runIcp(preceding_node, new_node);
+        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset;
+        bool converged = runIcp(preceding_node, new_node, successive_scan_offset); // TODO should we do anything with output?
+        if (!converged) {
+            ROS_ERROR_STREAM("Successive scan alignment didn't converge. Consider changing this to drop that scan");
+        }
         addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
         // Add constraints for non-successive scans
@@ -180,13 +183,14 @@ namespace dpg_slam {
                                                                      << preceding_node.getEstimatedPosition().first.y()
                                                                      << ", "
                                                                      << preceding_node.getEstimatedPosition().second);
-                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset =
-                                runIcp(node, preceding_node);
-                        ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", "
-                                                            << non_successive_scan_offset.first.first.y() << ", "
-                                                            << non_successive_scan_offset.first.second);
-                        addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
-                                                 non_successive_scan_offset);
+                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+                        if (runIcp(node, preceding_node, non_successive_scan_offset)) {
+                            ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", "
+                                                                << non_successive_scan_offset.first.first.y() << ", "
+                                                                << non_successive_scan_offset.first.second);
+                            addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
+                                                     non_successive_scan_offset);
+                        }
                     }
                 }
             }
@@ -235,7 +239,7 @@ namespace dpg_slam {
                               pose_graph_parameters_.laser_orientation_rel_bl_frame_);
     }
 
-    std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> DpgSLAM::runIcp(DpgNode &node_1, DpgNode &node_2) {
+    bool DpgSLAM::runIcp(DpgNode &node_1, DpgNode &node_2, std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> &icp_results) {
 
         std::pair<Vector2f, float> node_2_in_node_1 =
                 math_utils::inverseTransformPoint(node_2.getEstimatedPosition().first,
@@ -297,7 +301,8 @@ namespace dpg_slam {
 
         // Estimate the covariance
         Eigen::MatrixXd est_cov;
-        calculate_ICP_COV(node_2_cloud, node_1_cloud, est_transform, est_cov);
+        calculate_ICP_COV(node_2_cloud, node_1_cloud, est_transform, est_cov, pose_graph_parameters_.laser_x_variance_,
+                          pose_graph_parameters_.laser_y_variance_, pose_graph_parameters_.laser_theta_variance_);
 
         // Extract the angle and translation from the transform estimate
         Eigen::Matrix2f rotation_mat = est_transform.block<2, 2>(0, 0);
@@ -310,7 +315,8 @@ namespace dpg_slam {
         ROS_INFO_STREAM("Estimated transform " << est_transform);
         ROS_INFO_STREAM("converged? " << icp.hasConverged());
         ROS_INFO_STREAM("fitness score " << icp.getFitnessScore());
-        return std::make_pair(transform, est_cov);
+        icp_results = std::make_pair(transform, est_cov);
+        return icp.hasConverged();
     }
 
     DpgNode DpgSLAM::createNewPassFirstNode(const std::vector<float> &ranges,
