@@ -152,7 +152,7 @@ namespace dpg_slam {
 
         DpgNode preceding_node = dpg_nodes_.back();
 
-        ROS_INFO_STREAM("Preceding node pos " << preceding_node.getEstimatedPosition().first.x() << ", " << preceding_node.getEstimatedPosition().first.y() << ", " << preceding_node.getEstimatedPosition().second);
+//        ROS_INFO_STREAM("Preceding node pos " << preceding_node.getEstimatedPosition().first.x() << ", " << preceding_node.getEstimatedPosition().first.y() << ", " << preceding_node.getEstimatedPosition().second);
 
         // Add laser factor for previous pose and this node
         std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset;
@@ -172,22 +172,22 @@ namespace dpg_slam {
                     DpgNode node = dpg_nodes_[i];
                     if ((node.getEstimatedPosition().first - preceding_node.getEstimatedPosition().first).norm()
                     <= pose_graph_parameters_.maximum_node_dist_scan_comparison_) {
-                        ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
-                                                                     node.getEstimatedPosition().first.x() << ", "
-                                                                     << node.getEstimatedPosition().first.y() << ", "
-                                                                     << node.getEstimatedPosition().second
-                                                                     << " and node "
-                                                                     << preceding_node.getNodeNumber() << " at "
-                                                                     << preceding_node.getEstimatedPosition().first.x()
-                                                                     << ", "
-                                                                     << preceding_node.getEstimatedPosition().first.y()
-                                                                     << ", "
-                                                                     << preceding_node.getEstimatedPosition().second);
+//                        ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
+//                                                                     node.getEstimatedPosition().first.x() << ", "
+//                                                                     << node.getEstimatedPosition().first.y() << ", "
+//                                                                     << node.getEstimatedPosition().second
+//                                                                     << " and node "
+//                                                                     << preceding_node.getNodeNumber() << " at "
+//                                                                     << preceding_node.getEstimatedPosition().first.x()
+//                                                                     << ", "
+//                                                                     << preceding_node.getEstimatedPosition().first.y()
+//                                                                     << ", "
+//                                                                     << preceding_node.getEstimatedPosition().second);
                         std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
                         if (runIcp(node, preceding_node, non_successive_scan_offset)) {
-                            ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", "
-                                                                << non_successive_scan_offset.first.first.y() << ", "
-                                                                << non_successive_scan_offset.first.second);
+//                            ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", "
+//                                                                << non_successive_scan_offset.first.first.y() << ", "
+//                                                                << non_successive_scan_offset.first.second);
                             addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
                                                      non_successive_scan_offset);
                         }
@@ -229,7 +229,7 @@ namespace dpg_slam {
         Pose2 factor_transl(constraint_info.first.first.x(), constraint_info.first.first.y(),
                             constraint_info.first.second);
         noiseModel::Gaussian::shared_ptr factor_noise = noiseModel::Gaussian::Covariance(constraint_info.second);
-        ROS_INFO_STREAM("Adding constraint from node " << from_node_num << " to node " << to_node_num <<" factor " << factor_transl.x() << ", " << factor_transl.y() << ", " << factor_transl.theta());
+//        ROS_INFO_STREAM("Adding constraint from node " << from_node_num << " to node " << to_node_num <<" factor " << factor_transl.x() << ", " << factor_transl.y() << ", " << factor_transl.theta());
         graph_->add(BetweenFactor<Pose2>(from_node_num, to_node_num, factor_transl, factor_noise));
     }
 
@@ -237,6 +237,22 @@ namespace dpg_slam {
         return std::make_pair(Vector2f(pose_graph_parameters_.laser_x_in_bl_frame_,
                                               pose_graph_parameters_.laser_y_in_bl_frame_),
                               pose_graph_parameters_.laser_orientation_rel_bl_frame_);
+    }
+
+    void DpgSLAM::downsamplePointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &input_cloud,
+                                       const int &downsample_divisor,
+                                       pcl::PointCloud<pcl::PointXYZ>::Ptr &downsampled_cloud) {
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+        int cloud_count = 0;
+        for (pcl::PointXYZ point : *input_cloud) {
+            if ((cloud_count % downsample_divisor) == 0) {
+                cloud->push_back(point);
+            }
+            cloud_count++;
+        }
+        downsampled_cloud = cloud;
     }
 
     bool DpgSLAM::runIcp(DpgNode &node_1, DpgNode &node_2, std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> &icp_results) {
@@ -266,9 +282,9 @@ namespace dpg_slam {
         // Just going to set z coord to 0
         pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
 
-        ROS_INFO_STREAM("Ransac default iterations " << icp.getRANSACIterations());
-        ROS_INFO_STREAM("Ransac rejection " << icp.getRANSACOutlierRejectionThreshold());
-        ROS_INFO_STREAM("Use reciprocal correspondences " << icp.getUseReciprocalCorrespondences());
+//        ROS_INFO_STREAM("Ransac default iterations " << icp.getRANSACIterations());
+//        ROS_INFO_STREAM("Ransac rejection " << icp.getRANSACOutlierRejectionThreshold());
+//        ROS_INFO_STREAM("Use reciprocal correspondences " << icp.getUseReciprocalCorrespondences());
 
         // TODO are these in the right order or should they be swapped
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud = node_1.getCachedPointCloudFromNode(
@@ -276,8 +292,15 @@ namespace dpg_slam {
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud = node_2.getCachedPointCloudFromNode(
                 getLaserPositionRelativeToBaselink());
 
-        icp.setInputSource(node_2_cloud);
-        icp.setInputTarget(node_1_cloud);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud_downsampled;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud_downsampled;
+        downsamplePointCloud(node_1_cloud, pose_graph_parameters_.downsample_icp_points_ratio_,
+                             node_1_cloud_downsampled);
+        downsamplePointCloud(node_2_cloud, pose_graph_parameters_.downsample_icp_points_ratio_,
+                             node_2_cloud_downsampled);
+
+        icp.setInputSource(node_2_cloud_downsampled);
+        icp.setInputTarget(node_1_cloud_downsampled);
 
         // TODO set configs. Should we set any others?
         icp.setMaximumIterations(pose_graph_parameters_.icp_maximum_iterations_);
@@ -311,10 +334,10 @@ namespace dpg_slam {
         float offset_angle = rotation_2d.angle();
         std::pair<Vector2f, float> transform = std::make_pair(
                 Vector2f(est_transform(0, 3), est_transform(1, 3)), offset_angle);
-        ROS_INFO_STREAM("Returning ICP");
-        ROS_INFO_STREAM("Estimated transform " << est_transform);
-        ROS_INFO_STREAM("converged? " << icp.hasConverged());
-        ROS_INFO_STREAM("fitness score " << icp.getFitnessScore());
+//        ROS_INFO_STREAM("Returning ICP");
+//        ROS_INFO_STREAM("Estimated transform " << est_transform);
+//        ROS_INFO_STREAM("converged? " << icp.hasConverged());
+//        ROS_INFO_STREAM("fitness score " << icp.getFitnessScore());
         icp_results = std::make_pair(transform, est_cov);
         return icp.hasConverged();
     }

@@ -32,7 +32,6 @@ void playRosbag(const std::string &rosbag_name, const float &playback_rate, cons
     ROS_INFO_STREAM("System result: " << system(run_cmd.c_str()));
     new_pass_pub_.publish(std_msgs::Empty());
     ros::Duration(2).sleep();
-    // TODO publish new pass message and sleep briefly
 }
 
 /**

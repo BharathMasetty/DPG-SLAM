@@ -256,6 +256,17 @@ namespace dpg_slam {
                                              const float &odom_orientation_change, const uint32_t &pass_number);
 
         /**
+         * Downsample the given point cloud and put it in the downsampled_cloud pointer.
+         *
+         * @param input_cloud[in]           Cloud to downsample.
+         * @param downsample_divisor[in]    Divisor for fraction of points to keep (every 1/this many points).
+         * @param downsampled_cloud[out]    Smaller size cloud that was downsampled from the input cloud.
+         */
+        void downsamplePointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &input_cloud,
+                                  const int &downsample_divisor,
+                                  pcl::PointCloud<pcl::PointXYZ>::Ptr &downsampled_cloud);
+
+        /**
          * Create a DpgNode with the given laser scan information.
          *
          * @param ranges                    Range readings from the laser scan at the node.

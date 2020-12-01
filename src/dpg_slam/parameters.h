@@ -125,6 +125,7 @@ namespace dpg_slam {
             node_handle.param(kLaserXInBLFrameParamName, laser_x_in_bl_frame_, kDefaultLaserXInBLFrame);
             node_handle.param(kLaserYInBLFrameParamName, laser_y_in_bl_frame_, kDefaultLaserYInBLFrame);
             node_handle.param(kLaserOrientationInBLFrameParamName, laser_orientation_rel_bl_frame_, kDefaultLaserOrientationRelBLFrame);
+            node_handle.param(kDownsampleIcpPointsRatioParamName, downsample_icp_points_ratio_, kDefaultDownsampleIcpPointsRatio);
         }
 
         /**
@@ -158,12 +159,13 @@ namespace dpg_slam {
          * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
          */
         const double kDefaultIcpMaxCorrespondenceDistance = 0.6; // TODO tune
+        // ^ 0.7 also works reasonably well.
 
         /**
          * ROS Param Name for the maximum distance threshold between two correspondent points for ICP to consider them
          * in alignment.
          */
-        static constexpr const char* kIcpMaxCorrespondenceDistanceParamName = "icp_max_correspondence_distance_param_name";
+        static constexpr const char* kIcpMaxCorrespondenceDistanceParamName = "icp_max_correspondence_distance";
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?
@@ -344,6 +346,7 @@ namespace dpg_slam {
          * Default value for the variance in the x dimension to use in laser constraints.
          */
         const float kDefaultLaserXVariance = 0.5;
+        // ^ 0.3 also works reasonably well
 
         /**
          * ROS Param name for the variance in the y dimension to use in laser constraints.
@@ -354,6 +357,7 @@ namespace dpg_slam {
          * Default value for the variance in the y dimension to use in laser constraints.
          */
         const float kDefaultLaserYVariance = 0.5;
+        // ^ 0.3 also works reasonably well
 
         /**
          * ROS Param name for the variance in the theta dimension to use in laser constraints.
@@ -364,6 +368,23 @@ namespace dpg_slam {
          * Default value for the variance in the theta dimension to use in laser constraints.
          */
         const float kDefaultLaserThetaVariance = 0.3;
+        // ^ 0.2 also works reasonably well
+
+        /**
+         * Default value for the divisor for the fraction of points we should use in ICP.
+         */
+        const int kDefaultDownsampleIcpPointsRatio = 5;
+
+        /**
+         * ROS Param name for the divisor for the fraction of points we should use in ICP.
+         */
+        static constexpr const char *kDownsampleIcpPointsRatioParamName = "downsample_icp_points";
+
+        /**
+         * Divisor for the fraction of points we should use in ICP. (i.e. use 1/this many of the scan points from each
+         * scan to send to ICP).
+         */
+        int downsample_icp_points_ratio_;
 
         /**
          * Variance in the x dimension to use in laser constraints.
