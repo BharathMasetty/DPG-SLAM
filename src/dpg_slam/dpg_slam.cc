@@ -428,4 +428,63 @@ namespace dpg_slam {
         // Check if odom has changed enough since last time we processed the laser
         return false;
     }
+
+   
+    std::vector<dpgMapPoint> DpgSLAM::GetActiveMap(){
+	//TODO: FIll in 
+	std::vector<dpgMapPoint> map;
+	return map;
+    }
+
+    std::vector<dpgMapPoint> DpgSLAM::GetDynamicMap(){
+    	//TODO: Fill in
+	std::vector<dpgMapPoint> map;
+        return map;
+    }
+
+    std::vector<occupancyGrid> DpgSLAM::computeLocalSubMap(){
+        std::vector<occupancyGrid> grids;
+
+        //TODO: Fill in the occupancy grid data structure
+        //TODO: Implement Section 3A from the paper to fill in both the grids.
+        //TODO: Bharath
+        return grids;
+    }
+
+    std::vector<dpgMapPoint> DpgSLAM::detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid){
+
+        std::vector<dpgMapPoint> dynamicMapPoints;
+        //TODO: Implement Alg. 1 from the paper.
+        //TODO: Bharath
+
+        return dynamicMapPoints;
+    }
+
+    std::vector<DpgNode> DpgSLAM::updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints){
+
+        std::vector<DpgNode> inactiveNodes;
+        //TODO: Implement Alg. 2 from the paper.
+
+
+        return inactiveNodes;
+    }
+
+    void DpgSLAM::updateDPG(){
+    	// TODO: Bharath
+    }
+
+    void occupancyGrid::calculateOccupancyGrid(){
+
+        //TODO: Bharath 
+    }
+
+    std::pair<int, int> occupancyGrid::convertToKeyForm(const DpgNode& node) const {
+	Eigen::Vector2f loc = node.getEstimatedPosition().first;
+	int key_form_x = round(loc.x() / dpg_parameters_.occ_grid_resolution_);
+        int key_form_y = round(loc.y() / dpg_parameters_.occ_grid_resolution_); 
+    	
+	std::pair<int, int> cell_loc = std::make_pair(key_form_x, key_form_y);
+	return cell_loc;
+    }
+
 }
