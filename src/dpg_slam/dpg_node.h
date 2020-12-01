@@ -113,6 +113,22 @@ namespace dpg_slam {
          */
         pcl::PointCloud<pcl::PointXYZ>::Ptr getCachedPointCloudFromNode(
                 const std::pair<Eigen::Vector2f, float> &laser_pos_rel_base_link);
+    	
+	/*
+	 * Check of the sector corresponding to a given measurement is active or not
+	 * @param Index of the measurement points.
+	 *
+	 * @return bool indicating active sector or not
+	 */
+	bool isPointInActiveSector(const uint32_t measurementPointIndex);
+
+	/**
+	 * To check if the node is active or not
+	 */
+	bool isNodeActive() {
+	   return is_active_;
+	}
+    
     private:
 
         /**

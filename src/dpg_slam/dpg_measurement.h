@@ -71,6 +71,15 @@ namespace dpg_slam {
             return range_;
         }
 
+	/**
+	 * Get the sector number of this point
+	 * 
+	 * @return sector number of this point
+	 */
+	uint8_t getSectorNum(){
+	     return sector_num_;
+	}
+
     private:
 
         /**
@@ -133,6 +142,17 @@ namespace dpg_slam {
         std::vector<MeasurementPoint> getMeasurements() const {
             return measurements_;
         }
+
+	/*
+	 * TO know if a sector is active or inactive
+	 *
+	 * @param sector_num_
+	 *
+	 * @return bool representing active or inactive sector.
+	 */
+	bool isSectorActive(const uint8_t sector_num) {
+	    return sector_activation_[sector_num];
+	}
 
     private:
 
