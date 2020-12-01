@@ -278,12 +278,15 @@ namespace dpg_slam {
         /**
          * Run ICP on the measurements of the two nodes to get the estimated position of node 2 in the frame of node 1.
          *
-         * @param node_1    First node with measurements. Want to estimate the position of node 2 relative to this node.
-         * @param node_2    Second node with measurements. Want to estimate the position of this node relative to node 1.
+         * @param node_1[in]        First node with measurements. Want to estimate the position of node 2 relative to
+         *                          this node.
+         * @param node_2[in]        Second node with measurements. Want to estimate the position of this node relative
+         *                          to node 1.
+         * @param icp_results[out]  Pair with first entry as estimated position of node 2 relative to node 1 based on
+         *                          scan alignment and second entry as estimated covariance.
          *
-         * @return Pair with first entry as estimated position of node 2 relative to node 1 based on scan alignment and
-         * second entry as estimated covariance.
+         * @return True if the ICP run converged, false if it didn't converge.
          */
-        std::pair<std::pair<Eigen::Vector2f, float>, Eigen::MatrixXd> runIcp(DpgNode &node_1, DpgNode &node_2);
+        bool runIcp(DpgNode &node_1, DpgNode &node_2, std::pair<std::pair<Eigen::Vector2f, float>, Eigen::MatrixXd> &icp_results);
     };
 }  // end dpg_slam

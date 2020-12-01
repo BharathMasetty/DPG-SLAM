@@ -115,6 +115,13 @@ namespace dpg_slam {
             node_handle.param(kMinAngleBetweenNodesParamName, min_angle_between_nodes_, kDefaultMinAngleBetweenNodes);
             node_handle.param(kNonSuccessiveScanConstraintsParamName, non_successive_scan_constraints_, kDefaultNonsuccessiveScanConstraints);
             node_handle.param(kOdometryConstraintsParamName, odometry_constraints_, kDefaultOdometryConstraintsParamName);
+            node_handle.param(kLaserXVarianceParamName, laser_x_variance_, kDefaultLaserXVariance);
+            node_handle.param(kLaserYVarianceParamName, laser_y_variance_, kDefaultLaserYVariance);
+            node_handle.param(kLaserThetaVarianceParamName, laser_theta_variance_, kDefaultLaserThetaVariance);
+            node_handle.param(kMotionModelTranslErrorFromTranslParamName, motion_model_transl_error_from_transl_, kDefaultMotionModelTranslErrorFromTransl);
+            node_handle.param(kMotionModelTranslErrorFromRotParamName, motion_model_transl_error_from_rot_, kDefaultMotionModelTranslErrorFromRot);
+            node_handle.param(kMotionModelRotErrorFromTranslParamName, motion_model_rot_error_from_transl_, kDefaultMotionModelRotErrorFromTransl);
+            node_handle.param(kMotionModelRotErrorFromRotParamName, motion_model_rot_error_from_rot_, kDefaultMotionModelRotErrorFromRot);
         }
 
         /**
@@ -238,22 +245,27 @@ namespace dpg_slam {
         /**
          * Default multiplier for translational error from translation (used in odometry constraints).
          */
-        const float kDefaultMotionModelTranslErrorFromTransl = 0.05; // TODO tune
+        const float kDefaultMotionModelTranslErrorFromTransl = 0.4; // TODO tune
+
+        const std::string kMotionModelTranslErrorFromTranslParamName = "motion_transl_from_transl";
 
         /**
          * Default multiplier for translational error from rotation (used in odometry constraints).
          */
-        const float kDefaultMotionModelTranslErrorFromRot = 0.05; // TODO tune
+        const float kDefaultMotionModelTranslErrorFromRot = 0.4; // TODO tune
+        const std::string kMotionModelTranslErrorFromRotParamName = "motion_transl_from_rot";
 
         /**
          * Default multiplier for rotational error from translation (used in odometry constraints).
          */
-        const float kDefaultMotionModelRotErrorFromTransl = 0.05; // TODO tune
+        const float kDefaultMotionModelRotErrorFromTransl = 0.4; // TODO tune
+        const std::string kMotionModelRotErrorFromTranslParamName = "motion_rot_from_transl";
 
         /**
          * Default multiplier for rotational error from rotation (used in odometry constraints).
          */
-        const float kDefaultMotionModelRotErrorFromRot = 0.05; // TODO tune
+        const float kDefaultMotionModelRotErrorFromRot = 0.4; // TODO tune
+        const std::string kMotionModelRotErrorFromRotParamName = "motion_rot_from_rot";
 
         /**
          * Default x coordinate of the lidar in the base_link frame.
@@ -288,7 +300,52 @@ namespace dpg_slam {
         /**
          * Default configuration for adding constraints from the wheel odometry.
          */
-        const bool kDefaultOdometryConstraintsParamName = false;
+        const bool kDefaultOdometryConstraintsParamName = true;
+
+        /**
+         * ROS Param name for the variance in the x dimension to use in laser constraints.
+         */
+        const std::string kLaserXVarianceParamName = "laser_x_variance";
+
+        /**
+         * Default value for the variance in the x dimension to use in laser constraints.
+         */
+        const float kDefaultLaserXVariance = 0.5;
+
+        /**
+         * ROS Param name for the variance in the y dimension to use in laser constraints.
+         */
+        const std::string kLaserYVarianceParamName = "laser_y_variance";
+
+        /**
+         * Default value for the variance in the y dimension to use in laser constraints.
+         */
+        const float kDefaultLaserYVariance = 0.5;
+
+        /**
+         * ROS Param name for the variance in the theta dimension to use in laser constraints.
+         */
+        const std::string kLaserThetaVarianceParamName = "laser_theta_variance";
+
+        /**
+         * Default value for the variance in the theta dimension to use in laser constraints.
+         */
+        const float kDefaultLaserThetaVariance = 0.3;
+
+        /**
+         * Variance in the x dimension to use in laser constraints.
+         */
+        float laser_x_variance_;
+
+        /**
+         * Variance in the y dimension to use in laser constraints.
+         */
+        float laser_y_variance_;
+
+        /**
+         * Variance in the theta dimension to use in laser constraints.
+         */
+        float laser_theta_variance_;
 
         /**
          * True if we should add constraints between non-successive scans, false if we should only add observation

@@ -21,7 +21,7 @@
 
 
 // Assuming that the z coordinates for all points in both clouds are 0
-void calculate_ICP_COV(pcl::PointCloud<pcl::PointXYZ>::Ptr data_pi, pcl::PointCloud<pcl::PointXYZ>::Ptr model_qi, Eigen::Matrix4f& transform, Eigen::MatrixXd& ICP_COV) {
+void calculate_ICP_COV(pcl::PointCloud<pcl::PointXYZ>::Ptr data_pi, pcl::PointCloud<pcl::PointXYZ>::Ptr model_qi, Eigen::Matrix4f& transform, Eigen::MatrixXd& ICP_COV, float laser_x_variance, float laser_y_variance, float laser_theta_variance) {
 
     double Tx = transform(0,3);
     double Ty = transform(1,3);
@@ -570,9 +570,9 @@ d2J_dxdc    d2J_dydc    d2J_dzdc   d2J_dadc   d2J_dbdc   d2J_dc2
     ROS_INFO_STREAM("Setting output");
     // TODO probably take the variances from parameters while we're still fixing the main covariance piece.
     ICP_COV.resize(3, 3);
-    ICP_COV << 1, 0, 0,
-    0, 1, 0,
-    0, 0, 1;
+    ICP_COV << laser_x_variance, 0, 0,
+    0, laser_y_variance, 0,
+    0, 0, laser_theta_variance;
 
 
     ROS_INFO_STREAM("Set ICP cov");
