@@ -240,6 +240,7 @@ int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
 
   // TODO remove this
+  ROS_INFO_STREAM("Running GTSAM demo to verify install");
   ROS_INFO_STREAM(gtsam_test(argc, argv));
 
   // Initialize ROS.
@@ -247,10 +248,11 @@ int main(int argc, char** argv) {
   ros::NodeHandle n;
 
   // TODO actually initialize params
-  dpg_slam::PoseGraphParameters pose_graph_params;
+  dpg_slam::PoseGraphParameters pose_graph_params(n);
   dpg_slam::DpgParameters dpg_params;
+  dpg_slam::VisualizationParams visualization_params;
 
-  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params);
+  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params, visualization_params);
   InitializeMsgs();
 
   visualization_publisher_ =

@@ -4,7 +4,28 @@
 
 #pragma once
 
+#include <ros/ros.h>
+
 namespace dpg_slam {
+
+    /**
+     * Parameters related to visualization.
+     */
+    struct VisualizationParams {
+        VisualizationParams() : display_points_fraction_(kDefaultDisplayPointsFraction) {
+
+        }
+
+        /**
+         * Default value for the divisor for the fraction of points we should send when displaying the map.
+         */
+        const int kDefaultDisplayPointsFraction = 10;
+
+        /**
+         * When displaying the map, we should display 1 out of every this many points.
+         */
+        int display_points_fraction_;
+    };
 
     /**
      * Class that contains all DPG parameters.
@@ -64,7 +85,14 @@ namespace dpg_slam {
 
         // TODO need to make laser offset configurable based on robot
         // May also want to make some of these loadable from rosparam server
-        PoseGraphParameters() : icp_maximum_iterations_(kDefaultIcpMaximumIterations),
+
+        /**
+         * Constructor.
+         *
+         * @param node_handle Node handle for dynamically loading parameters from the ROS param server (if that is
+         * configured for the param).
+         */
+        PoseGraphParameters(ros::NodeHandle &node_handle) : icp_maximum_iterations_(kDefaultIcpMaximumIterations),
         icp_maximum_transformation_epsilon_(kDefaultIcpMaximumTransformationEpsilon),
         icp_max_correspondence_distance_(kDefaultIcpMaxCorrespondenceDistance),
         maximum_node_dist_scan_comparison_(kDefaultMaximumNodeDistScanComparison),
@@ -76,12 +104,28 @@ namespace dpg_slam {
         motion_model_rot_error_from_transl_(kDefaultMotionModelRotErrorFromTransl),
         motion_model_rot_error_from_rot_(kDefaultMotionModelRotErrorFromRot),
         laser_x_in_bl_frame_(kDefaultLaserXInBLFrame), laser_y_in_bl_frame_(kDefaultLaserYInBLFrame),
-        laser_orientation_rel_bl_frame_(kDefaultLaserOrientationRelBLFrame) {}
+        laser_orientation_rel_bl_frame_(kDefaultLaserOrientationRelBLFrame) {
+            node_handle.param(kIcpMaximumIterationsParamName, icp_maximum_iterations_, kDefaultIcpMaximumIterations);
+            node_handle.param(kIcpMaximumTransformationEpsilonParamName, icp_maximum_transformation_epsilon_, kDefaultIcpMaximumTransformationEpsilon);
+            node_handle.param(kIcpMaxCorrespondenceDistanceParamName, icp_max_correspondence_distance_, kDefaultIcpMaxCorrespondenceDistance);
+            node_handle.param(kRansacIterationsParamName, ransac_iterations_, kDefaultRansacIterations);
+            node_handle.param(kIcpUseReciprocalCorrespondences, icp_use_reciprocal_correspondences_, kDefaultIcpUseReciprocalCorrespondences);
+            node_handle.param(kMaximumNodeDistScanComparisonParamName, maximum_node_dist_scan_comparison_, kDefaultMaximumNodeDistScanComparison);
+            node_handle.param(kMinDistBetweenNodesParamName, min_dist_between_nodes_, kDefaultMinDistBetweenNodes);
+            node_handle.param(kMinAngleBetweenNodesParamName, min_angle_between_nodes_, kDefaultMinAngleBetweenNodes);
+            node_handle.param(kNonSuccessiveScanConstraintsParamName, non_successive_scan_constraints_, kDefaultNonsuccessiveScanConstraints);
+            node_handle.param(kOdometryConstraintsParamName, odometry_constraints_, kDefaultOdometryConstraintsParamName);
+        }
 
         /**
          * Default maximum number of iterations to run ICP for a single transform estimate.
          */
         const int kDefaultIcpMaximumIterations = 500; // TODO tune
+
+        /**
+         * ROS Param Name for the maximum number of iterations to run ICP for a single transform estimate.
+         */
+        const std::string kIcpMaximumIterationsParamName = "icp_maximum_iterations";
 
         /**
          * Default maximum allowable translation squared difference between transformation estimates for ICP to be
@@ -91,22 +135,61 @@ namespace dpg_slam {
          */
         const double kDefaultIcpMaximumTransformationEpsilon = 0.000000005; // TODO tune
 
+        /**
+         * ROS Param Name for the maximum allowable translation squared difference between transformation estimates for
+         * ICP to be considered converged.
+         */
+        const std::string kIcpMaximumTransformationEpsilonParamName = "icp_maximum_transformation_epsilon_param_name";
+
         // TODO should we include this?
         /**
          * Default maximum distance threshold between two correspondent points for ICP to consider them in alignment.
          *
          * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
          */
-        const double kDefaultIcpMaxCorrespondenceDistance = 0.2; // TODO tune
+        const double kDefaultIcpMaxCorrespondenceDistance = 0.6; // TODO tune
+
+        /**
+         * ROS Param Name for the maximum distance threshold between two correspondent points for ICP to consider them
+         * in alignment.
+         */
+        const std::string kIcpMaxCorrespondenceDistanceParamName = "icp_max_correspondence_distance_param_name";
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?
         // euclidean fitness epsilon?
 
         /**
+         * Default number of iterations to run RANSAC during ICP.
+         *
+         * Note: Haven't really experimented with this much.
+         */
+        const int kDefaultRansacIterations = 50;
+
+        /**
+         * ROS Param Name for the number of iterations to run RANSAC during ICP.
+         */
+        const std::string kRansacIterationsParamName = "ransac_iterations";
+
+        /**
+         * Default configuration for using reciprocal correspondences in ICP.
+         */
+        const bool kDefaultIcpUseReciprocalCorrespondences = true;
+
+        /**
+         * ROS Param Name for the configuration for using reciprocal correspondences in ICP.
+         */
+        const std::string kIcpUseReciprocalCorrespondences = "icp_use_reciprocal_correspondences";
+
+        /**
          * Default maximum amount that two nodes can be separated by to try to align their scans.
          */
         const float kDefaultMaximumNodeDistScanComparison = 3.0; // TODO tune
+
+        /**
+         * ROS Param Name for the maximum amount that two nodes can be separated by to try to align their scans.
+         */
+        const std::string kMaximumNodeDistScanComparisonParamName = "maximum_node_dist_scan_comparison_param_name";
 
         /**
          * Default maximum number of iterations for one run of GTSAM estimation.
@@ -118,14 +201,24 @@ namespace dpg_slam {
          * greater than this since the last considered laser scan, we should not add a new node to the pose graph
          * (unless the rotation threshold below has been exceeded).
          */
-        const float kDefaultMinDistBetweenNodes = 0.5; // TODO tune
+        const float kDefaultMinDistBetweenNodes = 1.0; // TODO tune
+
+        /**
+         * ROS Param Name for the minimum distance between two consecutive nodes.
+         */
+        const std::string kMinDistBetweenNodesParamName = "min_distance_between_nodes";
 
         /**
          * Default minimum angle between two consecutive nodes. If the robot's odometry has not estimated an orientation
          * change greater than this since the last considered laser scan, we should not add a new node to the pose graph
          * (unless the translation threshold above has been exceeded).
          */
-        const float kDefaultMinAngleBetweenNodes = M_PI_4; // TODO tune
+        const float kDefaultMinAngleBetweenNodes = M_PI / 6.0; // TODO tune
+
+        /**
+         * ROS Param Name for the minimum angle between two consecutive nodes.
+         */
+        const std::string kMinAngleBetweenNodesParamName = "min_angle_between_nodes";
 
         /**
          * Default standard deviation for the x component of the prior put on the first node in a pass.
@@ -178,6 +271,38 @@ namespace dpg_slam {
         const float kDefaultLaserOrientationRelBLFrame = 0.0;
 
         /**
+         * ROS Param Name for the configuration for adding constraints between non-successive scans.
+         */
+        const std::string kNonSuccessiveScanConstraintsParamName = "non_successive_scan_constraints";
+
+        /**
+         * Default configuration for adding constraints between non-successive scans.
+         */
+        const bool kDefaultNonsuccessiveScanConstraints = true;
+
+        /**
+         * ROS Param Name for the configuration for adding constraints from the wheel odometry.
+         */
+        const std::string kOdometryConstraintsParamName = "odometry_constraints";
+
+        /**
+         * Default configuration for adding constraints from the wheel odometry.
+         */
+        const bool kDefaultOdometryConstraintsParamName = false;
+
+        /**
+         * True if we should add constraints between non-successive scans, false if we should only add observation
+         * constraints between successive nodes (should only be false for tuning/debugging purposes).
+         */
+        bool non_successive_scan_constraints_;
+
+        /**
+         * True if we should add constraints from the wheel odometry, false if we should only use observation based
+         * constraints.
+         */
+        bool odometry_constraints_;
+
+        /**
          * Maximum number of iterations to run ICP for a single transform estimate.
          */
         int icp_maximum_iterations_;
@@ -197,6 +322,18 @@ namespace dpg_slam {
          * https://pointclouds.org/documentation/classpcl_1_1_registration.html#a65596dcc3cb5d2647857226fb3d999a5
          */
         double icp_max_correspondence_distance_;
+
+        /**
+         * Number of iterations to run RANSAC when running ICP.
+         */
+        int ransac_iterations_;
+
+        /**
+         * True if ICP should enforce reciprocal correspondences, false if it should not.
+         *
+         * See https://pcl.readthedocs.io/projects/tutorials/en/latest/registration_api.html.
+         */
+        bool icp_use_reciprocal_correspondences_;
 
         // TODO want to have any of the following for ICP
         // ICP RANSAC outlier rejection threshold?
