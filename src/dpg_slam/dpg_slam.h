@@ -548,6 +548,22 @@ namespace dpg_slam {
         std::vector<DpgNode> updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints);
 
         /**
+         * Get the active and dynamic map points. Each list will be populated with the matching points in the map frame.
+         *
+         * TODO is there any way to optimize this so we don't have to basically compute a massive point cloud every time?
+         * Doesn't seem like it because the poses can change and the activations can change at each time step.
+         *
+         * @param active_static_points[out]     Static points in the active map.
+         * @param active_added_points[out]      Added points in the active map.
+         * @param dynamic_removed_points[out]   Removed points (from inactive and active nodes). Make up the removed part of the dynamic map.
+         * @param dynamic_added_points[out]     Added points from all nodes. Make up the added part of the dynamic map.
+         */
+        void getActiveAndDynamicMapPoints(std::vector<Eigen::Vector2f> &active_static_points,
+                                          std::vector<Eigen::Vector2f> &active_added_points,
+                                          std::vector<Eigen::Vector2f> &dynamic_removed_points,
+                                          std::vector<Eigen::Vector2f> &dynamic_added_points);
+
+        /**
          * Method to delete inactive nodes from dpg graph
          * NOTE: This is not a top priority.
          */

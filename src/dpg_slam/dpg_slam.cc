@@ -636,6 +636,35 @@ namespace dpg_slam {
         return inactiveNodes;
     }
 
+    void DpgSLAM::getActiveAndDynamicMapPoints(std::vector<Vector2f> &active_static_points, std::vector<Vector2f> &active_added_points,
+                                               std::vector<Vector2f> &dynamic_removed_points, std::vector<Vector2f> &dynamic_added_points) {
+        for (const DpgNode &node : dpg_nodes_) {
+            std::pair<Vector2f, float> lidar_pose_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
+                                                                                      node.getEstimatedPosition().first, node.getEstimatedPosition().second);
+
+            // TODO do we want to subsample? Including every point will be a LOT
+            for (const MeasurementPoint &point : node.getMeasurement().getMeasurements()) {
+                PointLabel label = point.getLabel();
+                if ((label == NOT_YET_LABELED) || (label == MAX_RANGE)) {
+                    continue;
+                }
+                Vector2f point_pos = math_utils::transformPoint(point.getPointInLaserFrame(), 0, lidar_pose_in_map.first, lidar_pose_in_map.second).first;
+                if (node.isActive() && node.getMeasurement().isSectorActive(point.getSectorNum())) {
+                    if (label == STATIC) {
+                        active_static_points.emplace_back(point_pos);
+                    } else if (label == ADDED) {
+                        active_added_points.emplace_back(point_pos);
+                    }
+                }
+                if (label == ADDED) {
+                    dynamic_added_points.emplace_back(point_pos);
+                } else if (label == REMOVED) {
+                    dynamic_removed_points.emplace_back(point_pos);
+                }
+            }
+        }
+    }
+
     void DpgSLAM::updateDPG(){
         // TODO: Fill-in
     }

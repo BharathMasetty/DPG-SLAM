@@ -63,7 +63,7 @@ namespace dpg_slam {
          *
          * @return Angle of the ray that observed this point relative to the LiDAR frame.
          */
-        float getAngle() {
+        float getAngle() const {
             return angle_;
         }
 
@@ -72,7 +72,7 @@ namespace dpg_slam {
          *
          * @return Range measurement of this point.
          */
-        float getRange() {
+        float getRange() const {
             return range_;
         }
 
@@ -81,7 +81,7 @@ namespace dpg_slam {
          *
          * @return sector number of this point
          */
-        uint8_t getSectorNum(){
+        uint8_t getSectorNum() const {
              return sector_num_;
         }
 
@@ -90,7 +90,7 @@ namespace dpg_slam {
          *
          * @return Label for the point.
          */
-        PointLabel getLabel() {
+        PointLabel getLabel() const {
             return label_;
         }
 
@@ -99,7 +99,7 @@ namespace dpg_slam {
          *
          * @return Point in the laser frame (in cartesian coords).
          */
-        Eigen::Vector2f getPointInLaserFrame() {
+        Eigen::Vector2f getPointInLaserFrame() const {
             return Eigen::Vector2f(getRange() * cos(getAngle()), getRange() * sin(getAngle()));
         }
 

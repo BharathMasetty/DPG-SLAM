@@ -65,6 +65,14 @@ namespace dpg_slam {
         }
 
         /**
+         * Get if the node is active or not.
+         * @return
+         */
+        bool isActive() const {
+            return is_active_;
+        }
+
+        /**
          * Get the estimated position of the node.
          * @return
          */
