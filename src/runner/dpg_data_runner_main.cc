@@ -9,7 +9,7 @@ DEFINE_string(new_pass_topic, "/new_pass", "Name of ROS topic that when we've re
 DEFINE_bool(run_mit, false, "Run on the MIT dataset instead of GDC");
 
 DEFINE_string(gdc_dataset_folder, "~/projects/data_DPG-SLAM/DPGSlamData", "Folder containing gdc bags");
-DEFINE_string(mit_dataset_folder, "", "Folder containing MIT dataset bags");
+DEFINE_string(mit_dataset_folder, "~/projects/data_DPG-SLAM/mit_dpg_slam/reading_room", "Folder containing MIT dataset bags");
 
 const float kGdcLaserXInBLFrame = 0.2;
 const float kGdcLaserYInBLFrame = 0.0;
@@ -27,8 +27,8 @@ void playRosbag(const std::string &rosbag_name, const float &playback_rate, cons
     if (duration > 0) {
         duration_string = " -u " + std::to_string(duration) + " ";
     }
-    std::string run_cmd = "rosbag play " + rosbag_name + duration_string + " -r " + std::to_string(playback_rate) + " -s "
-            + std::to_string(start_time) + " --topics /odom /scan ";
+    std::string run_cmd = "rosbag play " + rosbag_name + duration_string + " /Cobot/Laser:=/scan -r " + std::to_string(playback_rate) + " -s "
+            + std::to_string(start_time) + " --topics /odom /scan /Cobot/Odometry /Cobot/Laser";
     ROS_INFO_STREAM("System result: " << system(run_cmd.c_str()));
     new_pass_pub_.publish(std_msgs::Empty());
     ros::Duration(2).sleep();
@@ -48,6 +48,7 @@ void setGdcRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserYInBLFrameParamName, kGdcLaserYInBLFrame);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserOrientationInBLFrameParamName,
                          kGdcLaserOrientationRelBLFrame);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMinAngleBetweenNodesParamName, M_PI / 6);
 }
 
 /**
@@ -64,6 +65,7 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserYInBLFrameParamName, kMitLaserYInBLFrame);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserOrientationInBLFrameParamName,
                          kMitLaserOrientationRelBLFrame);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMinAngleBetweenNodesParamName, 0.3);
 }
 
 std::string getBagPath(const std::string &folder_name, const std::string &bag_name) {
@@ -78,6 +80,8 @@ void runOnGdcRosBags() {
 }
 
 void runOnMitRosBags() {
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 1.2, 25);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.7, 40, 300);
     // TODO
 }
 
@@ -97,7 +101,7 @@ int main(int argc, char** argv) {
         ROS_INFO_STREAM("Setting GDC-specific params");
         setGdcRosParams(n);
     }
-    ROS_INFO_STREAM("Start DPG SLAM now");
+    ROS_INFO_STREAM("Set any override ROS params then Start DPG SLAM now");
 
     new_pass_pub_ = n.advertise<std_msgs::Empty>(FLAGS_new_pass_topic.c_str(), 1);
 

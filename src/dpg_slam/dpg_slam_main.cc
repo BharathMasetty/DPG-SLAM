@@ -40,6 +40,7 @@
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "sensor_msgs/LaserScan.h"
 #include "nav_msgs/Odometry.h"
+#include "cobot_msgs/CobotOdometryMsg.h"
 #include "ros/ros.h"
 #include "rosbag/bag.h"
 #include "rosbag/view.h"
@@ -88,6 +89,7 @@ using visualization::ClearVisualizationMsg;
 // Create command line arguements
 DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
 DEFINE_string(odom_topic, "/odom", "Name of ROS topic for odometry data");
+DEFINE_string(cobot_odom_topic, "/Cobot/Odometry", "Name of ROS topic for cobot odometry data");
 DEFINE_string(new_pass_topic, "/new_pass", "Name of ROS topic that when we've received a message indicates we're on a "
                                            "new pass");
 DEFINE_bool(gtsam_test, false, "Run GTSam test");
@@ -100,6 +102,8 @@ ros::Publisher visualization_publisher_;
 ros::Publisher localization_publisher_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
+Vector2f prev_odom_;
+float prev_angle_;
 
 void InitializeMsgs() {
   std_msgs::Header header;
@@ -162,6 +166,19 @@ void OdometryCallback(const nav_msgs::Odometry& msg) {
   const float odom_angle =
       2.0 * atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
   slam_->ObserveOdometry(odom_loc, odom_angle);
+}
+
+void CobotOdometryCallback(const cobot_msgs::CobotOdometryMsg &cobot_msg) {
+    if (FLAGS_v > 0) {
+        printf("Odometry t=%f\n", cobot_msg.header.stamp.toSec());
+    }
+
+    // TODO It seems like the cobot odometry provides the relative movement since the last odom message, but this needs to be verified.
+    std::pair<Vector2f, float> new_pose = math_utils::transformPoint(Vector2f(cobot_msg.dx, cobot_msg.dy),
+                                                                     cobot_msg.dr, prev_odom_, prev_angle_);
+    prev_odom_ = new_pose.first;
+    prev_angle_ = new_pose.second;
+    slam_->ObserveOdometry(new_pose.first, new_pose.second);
 }
 
 void NewPassCallback(const std_msgs::Empty &msg) {
@@ -272,6 +289,11 @@ int main(int argc, char** argv) {
           FLAGS_new_pass_topic.c_str(),
           1,
           NewPassCallback);
+
+    ros::Subscriber cobot_odom_sub = n.subscribe(
+            FLAGS_cobot_odom_topic.c_str(),
+            1,
+            CobotOdometryCallback);
   ROS_INFO_STREAM("Spinning");
   ros::spin();
 
