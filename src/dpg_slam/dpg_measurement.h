@@ -71,14 +71,18 @@ namespace dpg_slam {
             return range_;
         }
 
-	/**
-	 * Get the sector number of this point
-	 * 
-	 * @return sector number of this point
-	 */
-	uint8_t getSectorNum(){
-	     return sector_num_;
-	}
+        /**
+         * Get the sector number of this point
+         *
+         * @return sector number of this point
+         */
+        uint8_t getSectorNum(){
+             return sector_num_;
+        }
+
+        PointLabel getLabel() {
+            return label_;
+        }
 
     private:
 
