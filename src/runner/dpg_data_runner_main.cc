@@ -49,6 +49,7 @@ void playRosbag(const std::string &rosbag_name, const float &playback_rate, cons
     std::unique_lock<std::mutex> lk(reoptimization_done_mutex_);
     reoptimization_done_cv_.wait(lk, []{return dpg_ready_;});
     ros::Duration(1).sleep();
+    dpg_ready_ = false;
 }
 
 

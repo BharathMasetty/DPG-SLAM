@@ -20,16 +20,18 @@ namespace dpg_slam {
         /**
          * Create the DPG node.
          *
-         * @param init_pos          Initial position estimate for the node.
-         * @param init_orientation  Initial orientation estimate for the node.
-         * @param pass_number       Number of the pass that the node is part of.
-         * @param node_number       Node number (to be used in factor graph).
-         * @param measurement       Measurement taken at the node.
+         * @param init_pos                  Initial position estimate for the node.
+         * @param init_orientation          Initial orientation estimate for the node.
+         * @param pass_number               Number of the pass that the node is part of.
+         * @param node_number               Node number (to be used in factor graph).
+         * @param measurement               Measurement taken at the node.
+         * @param laser_pos_rel_base_link   Pose of the laser relative to the base_link.
          */
         DpgNode(const Eigen::Vector2f &init_pos, const float &init_orientation, const uint32_t &pass_number,
-                const uint32_t &node_number, const Measurement &measurement) : node_loc_(init_pos),
+                const uint32_t &node_number, const Measurement &measurement,
+                const std::pair<Eigen::Vector2f, float> &laser_pos_rel_base_link) : node_loc_(init_pos),
                 node_orientation_(init_orientation), changed_(false), is_active_(true), pass_number_(pass_number),
-                node_number_(node_number), measurement_(measurement) {
+                node_number_(node_number), measurement_(measurement), laser_pos_rel_base_link_(laser_pos_rel_base_link) {
 
         }
 
@@ -60,6 +62,14 @@ namespace dpg_slam {
          */
         void setInactive() {
             is_active_ = false;
+        }
+
+        /**
+         * Get if the node is active or not.
+         * @return
+         */
+        bool isActive() const {
+            return is_active_;
         }
 
         /**
@@ -107,12 +117,28 @@ namespace dpg_slam {
          *
          * This contains all points, not just those that are in activated sectors or having a particular label.
          *
-         * @param laser_pos_rel_base_link   Pose of the laser relative to the base_link.
-         *
          * @return Point cloud relative to base_link representing the full scan taken at this node.
          */
-        pcl::PointCloud<pcl::PointXYZ>::Ptr getCachedPointCloudFromNode(
-                const std::pair<Eigen::Vector2f, float> &laser_pos_rel_base_link);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr getCachedPointCloudFromNode();
+
+        /**
+         * Deactivate sectors of this node that intersect with the given removed points and deactivate the node if it
+         * has too few active sectors after this.
+         *
+         * @param removed_points        Points that have been removed, in the map frame.
+         * @param min_active_sectors    Minimum percentage of active sectors for a node to still be active.
+         */
+        void deactivateIntersectingSectors(const std::vector<Eigen::Vector2f> &removed_points, const float &min_active_sectors);
+
+        /**
+         * Set the label for the point with the given index.
+         *
+         * @param point_index   Index of the point in the overall measurement.
+         * @param new_label     New label for the point.
+         */
+        void setPointLabel(const uint64_t &point_index, const PointLabel &new_label) {
+            measurement_.setPointLabel(point_index, new_label);
+        }
     	
 	/*
 	 * Check of the sector corresponding to a given measurement is active or not
@@ -166,6 +192,11 @@ namespace dpg_slam {
          * relative to the robot's coordinate frame.
          */
         Measurement measurement_;
+
+        /**
+         * Position of the laser relative to the base link frame.
+         */
+        std::pair<Eigen::Vector2f, float> laser_pos_rel_base_link_;
 
         // This has all points in the measurement.
         // TODO consider refreshing/making other copy with only active points

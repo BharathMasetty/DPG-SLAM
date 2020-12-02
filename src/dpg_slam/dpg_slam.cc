@@ -4,6 +4,7 @@
 #include "icp_cov/cov_func_point_to_point.h"
 #include <visualization/visualization.h>
 #include <ros/ros.h>
+#include <unordered_set>
 
 using namespace gtsam;
 using namespace Eigen;
@@ -23,7 +24,7 @@ namespace dpg_slam {
         pass_number_++;
         odom_initialized_ = false;
         first_scan_for_pass_ = true;
-    	current_pass_nodes_.clear();
+        current_pass_nodes_.clear();
 
         reoptimize();
         ROS_INFO_STREAM("Done reoptimizing");
@@ -280,7 +281,7 @@ namespace dpg_slam {
             }
         }
         dpg_nodes_.push_back(new_node);
-	    current_pass_nodes_.push_back(new_node);
+        current_pass_nodes_.push_back(new_node);
 
         optimizeGraph();
     }
@@ -377,10 +378,8 @@ namespace dpg_slam {
 //        ROS_INFO_STREAM("Use reciprocal correspondences " << icp.getUseReciprocalCorrespondences());
 
         // TODO are these in the right order or should they be swapped
-        pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud = node_1.getCachedPointCloudFromNode(
-                getLaserPositionRelativeToBaselink());
-        pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud = node_2.getCachedPointCloudFromNode(
-                getLaserPositionRelativeToBaselink());
+        pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud = node_1.getCachedPointCloudFromNode();
+        pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud = node_2.getCachedPointCloudFromNode();
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud_downsampled;
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud_downsampled;
@@ -490,17 +489,14 @@ namespace dpg_slam {
 
         // Make a measurement point for each range reading within range and assign it a sector
         for (size_t i = 0; i < ranges.size(); i++) {
-            // TODO should we exclude points outside of range_max? Verify this
-            if (ranges[i] < range_max) {
-                uint8_t sector_num = i / points_in_sector; // TODO is this correct?
-                float angle = angle_inc * i + angle_min;
-                measurement_points.emplace_back(angle, ranges[i], sector_num);
-            }
+            uint8_t sector_num = i / points_in_sector; // TODO is this correct?
+            float angle = angle_inc * i + angle_min;
+            measurement_points.emplace_back(angle, ranges[i], sector_num, range_max);
         }
 
-        Measurement measurement(num_sectors, measurement_points);
+        Measurement measurement(num_sectors, measurement_points, angle_min, angle_max, range_max, angle_inc);
 
-        return DpgNode(init_pos, init_orientation, pass_number, node_number, measurement);
+        return DpgNode(init_pos, init_orientation, pass_number, node_number, measurement, getLaserPositionRelativeToBaselink());
     }
 
     void DpgSLAM::ObserveOdometry(const Vector2f& odom_loc,
@@ -551,8 +547,7 @@ namespace dpg_slam {
         int point_num = 0;
         for (size_t i = 0; i < dpg_nodes_.size(); i++) {
             DpgNode node = dpg_nodes_[i];
-            pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud = node.getCachedPointCloudFromNode(
-                    getLaserPositionRelativeToBaselink());
+            pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud = node.getCachedPointCloudFromNode();
 
             std::pair<Vector2f, float> node_pose = node.getEstimatedPosition();
             for (pcl::PointXYZ point : *point_cloud) {
@@ -582,46 +577,46 @@ namespace dpg_slam {
 
    
     std::vector<dpgMapPoint> DpgSLAM::GetActiveMap(){
-	//TODO: FIll in 
-	std::vector<dpgMapPoint> map;
-	return map;
+        //TODO: FIll in
+        std::vector<dpgMapPoint> map;
+        return map;
     }
 
     std::vector<dpgMapPoint> DpgSLAM::GetDynamicMap(){
-    	//TODO: Fill in
-	std::vector<dpgMapPoint> map;
+        //TODO: Fill in
+        std::vector<dpgMapPoint> map;
         return map;
     }
 
     std::vector<occupancyGrid> DpgSLAM::computeLocalSubMap(){
-	
-	// Grid of current Pose chain
-	std::vector<DpgNode> currPoseChain;
-	uint32_t maxNumNodes = dpg_parameters_.current_pose_chain_len_;
-	if (current_pass_nodes_.size() <= maxNumNodes){
-		// Copy all nodes from current pass
-		currPoseChain = current_pass_nodes_;
-	}
-	else {
-		// Copy latest few from current pass
-		currPoseChain.assign(current_pass_nodes_.end()-maxNumNodes, current_pass_nodes_.end());
-	}
-	
-	occupancyGrid currGrid(currPoseChain, dpg_parameters_, pose_graph_parameters_);
-	// Grid for FOV nodes
-	std::vector<DpgNode> fovNodes = getNodesCoveringCurrGrid(currGrid);
-	occupancyGrid subMapGrid(fovNodes, dpg_parameters_, pose_graph_parameters_);
+    
+        // Grid of current Pose chain
+        std::vector<DpgNode> currPoseChain;
+        uint32_t maxNumNodes = dpg_parameters_.current_pose_chain_len_;
+        if (current_pass_nodes_.size() <= maxNumNodes){
+            // Copy all nodes from current pass
+            currPoseChain = current_pass_nodes_;
+        }
+        else {
+            // Copy latest few from current pass
+            currPoseChain.assign(current_pass_nodes_.end()-maxNumNodes, current_pass_nodes_.end());
+        }
 
-	std::vector<occupancyGrid> grids{currGrid, subMapGrid};
+        occupancyGrid currGrid(currPoseChain, dpg_parameters_, pose_graph_parameters_);
+        // Grid for FOV nodes
+        std::vector<DpgNode> fovNodes = getNodesCoveringCurrGrid(currGrid);
+        occupancyGrid subMapGrid(fovNodes, dpg_parameters_, pose_graph_parameters_);
+
+        std::vector<occupancyGrid> grids{currGrid, subMapGrid};
         return grids;
     }
-	
+    
     std::vector<DpgNode> DpgSLAM::getNodesCoveringCurrGrid(const occupancyGrid& currGrid) {
-    	std::vector<DpgNode> FovNodes;
-	for (uint32_t i=0; i<(dpg_nodes_.size()-current_pass_nodes_.size()); i++) {
-		// TODO: FIll in	
-	}
-	return FovNodes;
+        std::vector<DpgNode> FovNodes;
+        for (uint32_t i=0; i<(dpg_nodes_.size()-current_pass_nodes_.size()); i++) {
+            // TODO: FIll in
+        }
+        return FovNodes;
     }
 
     std::vector<dpgMapPoint> DpgSLAM::detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid){
@@ -633,6 +628,55 @@ namespace dpg_slam {
         return dynamicMapPoints;
     }
 
+
+    void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
+                                                           const occupancyGrid &local_submap_occ_grid,
+                                                           std::vector<PointIdInfo> &removed_points) {
+        std::vector<PointIdInfo> added_points;
+        std::vector<PointIdInfo> removed_points_non_deduped;
+
+        for (const occupancyGrid curr_node_grid : current_submap_occ_grids) {
+            detectAndLabelChangesForCurrentNode(curr_node_grid, local_submap_occ_grid, added_points,
+                                                removed_points_non_deduped);
+        }
+
+        for (const PointIdInfo &added_point : added_points) {
+            dpg_nodes_[added_point.node_num_].setPointLabel(added_point.point_num_in_node_, ADDED);
+        }
+
+        std::unordered_map<uint64_t, std::unordered_set<uint64_t>> removed_by_node_num;
+        for (const PointIdInfo &removed_point : removed_points_non_deduped) {
+            if (removed_by_node_num.find(removed_point.node_num_) == removed_by_node_num.end()) {
+                removed_by_node_num[removed_point.node_num_] = {};
+            }
+            removed_by_node_num[removed_point.node_num_].insert(removed_point.point_num_in_node_);
+        }
+
+        for (const auto &removed_for_node : removed_by_node_num) {
+            for (const uint64_t &removed_index : removed_for_node.second) {
+                dpg_nodes_[removed_index].setPointLabel(removed_index, REMOVED);
+                removed_points.emplace_back(PointIdInfo(removed_for_node.first, removed_index));
+            }
+        }
+    }
+
+     void DpgSLAM::detectAndLabelChangesForCurrentNode(
+            const occupancyGrid &current_node_occ_grid,
+            const occupancyGrid &local_submap_occ_grid,
+            std::vector<PointIdInfo> &added_points,
+            std::vector<PointIdInfo> &removed_points) {
+        for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
+            CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
+            if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
+                std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                added_points.insert(added_points.end(), new_added.begin(), new_added.end());
+            } else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
+                std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                removed_points.insert(removed_points.end(), new_removed.begin(), new_removed.end());
+            }
+        }
+    }
+
     std::vector<DpgNode> DpgSLAM::updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints){
 
         std::vector<DpgNode> inactiveNodes;
@@ -642,109 +686,181 @@ namespace dpg_slam {
         return inactiveNodes;
     }
 
+    void DpgSLAM::getActiveAndDynamicMapPoints(std::vector<Vector2f> &active_static_points, std::vector<Vector2f> &active_added_points,
+                                               std::vector<Vector2f> &dynamic_removed_points, std::vector<Vector2f> &dynamic_added_points) {
+        for (const DpgNode &node : dpg_nodes_) {
+            std::pair<Vector2f, float> lidar_pose_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
+                                                                                      node.getEstimatedPosition().first, node.getEstimatedPosition().second);
+
+            // TODO do we want to subsample? Including every point will be a LOT
+            for (const MeasurementPoint &point : node.getMeasurement().getMeasurements()) {
+                PointLabel label = point.getLabel();
+                if ((label == NOT_YET_LABELED) || (label == MAX_RANGE)) {
+                    continue;
+                }
+                Vector2f point_pos = math_utils::transformPoint(point.getPointInLaserFrame(), 0, lidar_pose_in_map.first, lidar_pose_in_map.second).first;
+                if (node.isActive() && node.getMeasurement().isSectorActive(point.getSectorNum())) {
+                    if (label == STATIC) {
+                        active_static_points.emplace_back(point_pos);
+                    } else if (label == ADDED) {
+                        active_added_points.emplace_back(point_pos);
+                    }
+                }
+                if (label == ADDED) {
+                    dynamic_added_points.emplace_back(point_pos);
+                } else if (label == REMOVED) {
+                    dynamic_removed_points.emplace_back(point_pos);
+                }
+            }
+        }
+    }
+
     void DpgSLAM::updateDPG(){
-    	// TODO: Fill-in
+        // TODO: Fill-in
     }
 
     void occupancyGrid::calculateOccupancyGrid(){
-	
-	// Filling up the occupancy grid for each node.
-	for(uint32_t i=0; i<Nodes_.size(); i++){
-		DpgNode node = Nodes_[i];
-		if (node.isNodeActive()){
-			convertLaserRangeToCellKey(node);
-		}
-	}
+        // Filling up the occupancy grid for each node.
+        for(uint32_t i=0; i<Nodes_.size(); i++){
+            DpgNode node = Nodes_[i];
+            if (include_inactive_ || node.isNodeActive()) {
+                convertLaserRangeToCellKey(node);
+            }
+        }
     }
 
     cellKey occupancyGrid::convertToKeyForm(const Eigen::Vector2f& loc) const {
-	int key_form_x = round(loc.x() / dpg_parameters_.occ_grid_resolution_);
-        int key_form_y = round(loc.y() / dpg_parameters_.occ_grid_resolution_); 
-    	
-	cellKey cell_loc = std::make_pair(key_form_x, key_form_y);
-	return cell_loc;
+        int key_form_x = round(loc.x() / dpg_parameters_.occ_grid_resolution_);
+            int key_form_y = round(loc.y() / dpg_parameters_.occ_grid_resolution_);
+
+        cellKey cell_loc = std::make_pair(key_form_x, key_form_y);
+        return cell_loc;
     }
 
     void occupancyGrid::convertLaserRangeToCellKey(const DpgNode& node) { 
-	//Returns occupied Cells in active sectors of the node.
-	DpgNode node_ = node;
-	Measurement scanMeasurementAtNode = node_.getMeasurement();
-	std::vector<MeasurementPoint> measurementsAtNode = scanMeasurementAtNode.getMeasurements();
-	std::pair<Eigen::Vector2f, float> nodeLocInfo = node_.getEstimatedPosition();
-	Eigen::Vector2f nodePosition = nodeLocInfo.first;
-	float nodeAngle = nodeLocInfo.second;
-	std::vector<cellKey> occupiedCells;
-	std::vector<cellKey> unoccupiedCells;
-	float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
-	float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
-	float LaserAngle = pose_graph_parameters_.laser_orientation_rel_bl_frame_;
-	pcl::PointCloud<pcl::PointXYZ>::Ptr scan = node_.getCachedPointCloudFromNode(std::make_pair(Eigen::Vector2f(LaserX, LaserY), LaserAngle));	
-	Vector2f LaserLocInBaseFrame(LaserX, LaserY);
+        //Returns occupied Cells in active sectors of the node.
+        DpgNode node_ = node;
+        Measurement scanMeasurementAtNode = node_.getMeasurement();
+        std::vector<MeasurementPoint> measurementsAtNode = scanMeasurementAtNode.getMeasurements();
+        std::pair<Eigen::Vector2f, float> nodeLocInfo = node_.getEstimatedPosition();
+        Eigen::Vector2f nodePosition = nodeLocInfo.first;
+        float nodeAngle = nodeLocInfo.second;
+        std::vector<cellKey> occupiedCells;
+        std::vector<cellKey> unoccupiedCells;
+        float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
+        float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
 
-	Vector2f LaserInMapFrame(math_utils::transformPoint(LaserLocInBaseFrame, 0, nodePosition, nodeAngle).first);
+        std::pair<Vector2f, float> LaserInMapFrame =
+                math_utils::transformPoint(Vector2f(LaserX, LaserY),
+                                           pose_graph_parameters_.laser_orientation_rel_bl_frame_,
+                                           nodePosition, nodeAngle);
 
-	// Assuming that the size of measurements_ vector at a node and what we get from getCachedPointCloud are the same
-	for (uint32_t i =0; i<measurementsAtNode.size(); i++) {
-		MeasurementPoint point = measurementsAtNode[i];
-		pcl::PointXYZ tempPoint = (*scan)[i];
-		Vector2f scanPoint(tempPoint.x, tempPoint.y); 
-		uint8_t sector_num = point.getSectorNum();
+        // Assuming that the size of measurements_ vector at a node and what we get from getCachedPointCloud are the same
+        for (uint32_t i =0; i<measurementsAtNode.size(); i++) {
+            MeasurementPoint point = measurementsAtNode[i];
+            Vector2f scanPoint = math_utils::transformPoint(point.getPointInLaserFrame(), 0, LaserInMapFrame.first, LaserInMapFrame.second).first;
+            uint8_t sector_num = point.getSectorNum();
 
-		
-		if (scanMeasurementAtNode.isSectorActive(sector_num)){
-			Eigen::Vector2f pointLocationInMapFrame(math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
-                	cellKey cell = convertToKeyForm(pointLocationInMapFrame);
-                	occupiedCells.push_back(cell);
-		 	float range = point.getRange();
-			
-			// Get Laser Line
-			std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame, pointLocationInMapFrame, range);
-			unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(), emptyCellsbetweenLaserAndPoint.end());		
-		}
-	}
-	
-	setFreeCells(unoccupiedCells);
-	setOccupiedCells(occupiedCells);
+            if ((include_inactive_) || (scanMeasurementAtNode.isSectorActive(sector_num))) {
+                if ((point.getLabel() == MAX_RANGE) || (include_static_ && (point.getLabel() == PointLabel::STATIC)) ||
+                    (include_added_ && (point.getLabel() == PointLabel::ADDED)) || (point.getLabel() == PointLabel::REMOVED)) {
+                    Eigen::Vector2f pointLocationInMapFrame(
+                            math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
+                    cellKey cell = convertToKeyForm(pointLocationInMapFrame);
+                    max_cell_x_ = std::max(cell.first, max_cell_x_);
+                    min_cell_x_ = std::min(cell.first, min_cell_x_);
+                    min_cell_y_ = std::min(cell.second, min_cell_y_);
+                    max_cell_y_ = std::max(cell.second, max_cell_y_);
+
+                    if (point.getLabel() != MAX_RANGE) {
+
+                        occupied_cell_info_[cell].points_.emplace_back(node.getNodeNumber(), i);
+                        occupiedCells.push_back(cell);
+                    }
+
+                    float range = point.getRange();
+
+                    // Get Laser Line
+                    std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame.first,
+                                                                                                        pointLocationInMapFrame,
+                                                                                                        range);
+                    unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(),
+                                           emptyCellsbetweenLaserAndPoint.end());
+                }
+            }
+        }
+
+        setFreeCells(unoccupiedCells);
+        setOccupiedCells(occupiedCells);
     }
 
     void occupancyGrid::setOccupiedCells(const std::vector<cellKey> &occupiedCells) {
-    	for (uint32_t i=0;i<occupiedCells.size();i++) {
-		gridInfo[occupiedCells[i]] = OCCUPIED;
-	}    	
+        for (uint32_t i=0;i<occupiedCells.size();i++) {
+            gridInfo[occupiedCells[i]] = OCCUPIED;
+        }
     }
-	
+    
     void occupancyGrid::setFreeCells(const std::vector<cellKey> &freeCells) {
         for (uint32_t i=0;i<freeCells.size();i++) {
-                // Only allow to set FREE of it is not OCCUPIED before
-		if (gridInfo[freeCells[i]] != OCCUPIED){
-			gridInfo[freeCells[i]] = FREE;
-		}
+            // Only allow to set FREE of it is not OCCUPIED before
+
+            if (gridInfo[freeCells[i]] != OCCUPIED){
+                gridInfo[freeCells[i]] = FREE;
+            }
+        }
+    }
+
+    void occupancyGrid::toOccGridMsg(nav_msgs::OccupancyGrid &occ_grid_msg, bool distinguish_free) {
+        occ_grid_msg.info.resolution = dpg_parameters_.occ_grid_resolution_;
+        occ_grid_msg.info.width = max_cell_x_ - min_cell_x_;
+        occ_grid_msg.info.height = max_cell_y_ - min_cell_y_;
+
+        occ_grid_msg.info.origin.orientation.w = 1;
+        occ_grid_msg.info.origin.position.x = min_cell_x_ * occ_grid_msg.info.resolution;
+        occ_grid_msg.info.origin.position.y = min_cell_y_ * occ_grid_msg.info.resolution;
+
+        occ_grid_msg.header.frame_id = "map";
+
+
+        occ_grid_msg.data.resize(occ_grid_msg.info.width * occ_grid_msg.info.height);
+        for (size_t i = 0; i < occ_grid_msg.data.size(); i++) {
+            occ_grid_msg.data[i] = -1;
+        }
+
+        for (const auto &cell_info : gridInfo) {
+            cellKey cell_pos = cell_info.first;
+            int data_index = (cell_pos.first - min_cell_x_) + (occ_grid_msg.info.width * (cell_pos.second - min_cell_y_));
+            if (cell_info.second == OCCUPIED) {
+                occ_grid_msg.data[data_index] = 100;
+            } else if ((cell_info.second == FREE) && (distinguish_free)) {
+                occ_grid_msg.data[data_index] = 0;
+            }
         }
     }
 
     std::vector<cellKey> occupancyGrid::getIntermediateFreeCellsInFOV(const Eigen::Vector2f &LaserLoc, const Eigen::Vector2f &scanLoc, const float& range) {
-	/* Dividing the range line into bins and calculating the intermediate points on the 
-	 * scan line using the parametric line equation. The we identify the cellKey for the 
-	 * intermediate point to get add it to the list of unoccupied cells.
-	 *
-	 * NOTE: There might be some repetitions/missing in the intermediate cells found this w
-	 * depending on the resoution. Better to have smaller bins but not too small.
-	 */
-	    
-	std::vector<cellKey> unOccupiedCells;
-	float startX = LaserLoc.x();
-	float startY = LaserLoc.y();
-	float endX  = LaserLoc.x();
-	float endY = LaserLoc.y();
-	// Might need to alter this resolution
-	uint32_t num_bins = round(range/(dpg_parameters_.occ_grid_resolution_));
-	float increment = 1.0/num_bins;
-	for (float t=0.0; t<1.0; t=t+increment){
-		Vector2f intermediatePoint((1-t)*startX + t*endX, (1-t)*startY + t*endY);
-		cellKey intermediateCell = convertToKeyForm(intermediatePoint);
-		unOccupiedCells.push_back(intermediateCell);	
-	}
-    	return unOccupiedCells;	    
+        /* Dividing the range line into bins and calculating the intermediate points on the
+         * scan line using the parametric line equation. The we identify the cellKey for the
+         * intermediate point to get add it to the list of unoccupied cells.
+         *
+         * NOTE: There might be some repetitions/missing in the intermediate cells found this w
+         * depending on the resoution. Better to have smaller bins but not too small.
+         */
+
+        std::vector<cellKey> unOccupiedCells;
+        float startX = LaserLoc.x();
+        float startY = LaserLoc.y();
+        float endX  = scanLoc.x();
+        float endY = scanLoc.y();
+        // Might need to alter this resolution
+        uint32_t num_bins = round(range/(dpg_parameters_.occ_grid_resolution_));
+        float increment = 1.0/num_bins;
+        for (float t=0.0; t<1.0; t=t+increment){
+            Vector2f intermediatePoint((1-t)*startX + t*endX, (1-t)*startY + t*endY);
+            cellKey intermediateCell = convertToKeyForm(intermediatePoint);
+            unOccupiedCells.push_back(intermediateCell);
+        }
+        return unOccupiedCells;
     }
 
 }

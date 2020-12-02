@@ -18,7 +18,7 @@ namespace dpg_slam {
      *
      * TODO - should we just default to static? When do the labels get changed?
      */
-    enum PointLabel {STATIC, ADDED, REMOVED, NOT_YET_LABELED};
+    enum PointLabel {STATIC, ADDED, REMOVED, NOT_YET_LABELED, MAX_RANGE};
 
     /**
      * This class represents an individual point from a laser scan.
@@ -36,10 +36,13 @@ namespace dpg_slam {
          * @param angle         Angle of the laser scan relative to the lidar.
          * @param range         Range measurement.
          * @param sector_num    Sector number.
+         * @param max_range     Maximum range reading (we should ignore any that are not less than this).
          */
-        MeasurementPoint(const float &angle, const float &range, const uint8_t &sector_num) : angle_(angle),
+        MeasurementPoint(const float &angle, const float &range, const uint8_t &sector_num, const float &max_range) : angle_(angle),
         range_(range), label_(NOT_YET_LABELED), sector_num_(sector_num) {
-
+            if (range_ >= max_range) {
+                label_ = MAX_RANGE;
+            }
         }
 
         /**
@@ -50,7 +53,9 @@ namespace dpg_slam {
          * @param new_label New label that the point should have
          */
         void setLabel(const PointLabel &new_label) {
-            label_ = new_label;
+            if (label_ != MAX_RANGE) {
+                label_ = new_label;
+            }
         }
 
         /**
@@ -58,7 +63,7 @@ namespace dpg_slam {
          *
          * @return Angle of the ray that observed this point relative to the LiDAR frame.
          */
-        float getAngle() {
+        float getAngle() const {
             return angle_;
         }
 
@@ -67,18 +72,36 @@ namespace dpg_slam {
          *
          * @return Range measurement of this point.
          */
-        float getRange() {
+        float getRange() const {
             return range_;
         }
 
-	/**
-	 * Get the sector number of this point
-	 * 
-	 * @return sector number of this point
-	 */
-	uint8_t getSectorNum(){
-	     return sector_num_;
-	}
+        /**
+         * Get the sector number of this point
+         *
+         * @return sector number of this point
+         */
+        uint8_t getSectorNum() const {
+             return sector_num_;
+        }
+
+        /**
+         * Get the label for the point.
+         *
+         * @return Label for the point.
+         */
+        PointLabel getLabel() const {
+            return label_;
+        }
+
+        /**
+         * Get the point in the laser frame (in cartesian coordinates).
+         *
+         * @return Point in the laser frame (in cartesian coords).
+         */
+        Eigen::Vector2f getPointInLaserFrame() const {
+            return Eigen::Vector2f(getRange() * cos(getAngle()), getRange() * sin(getAngle()));
+        }
 
     private:
 
@@ -109,18 +132,21 @@ namespace dpg_slam {
         /**
          * Create a measurement based on a full scan.
          *
-         * @param num_sectors   Number of sectors in the scan.
-         * @param measurements  Individual measurements that compose scan.
+         * @param num_sectors       Number of sectors in the scan.
+         * @param measurements      Individual measurements that compose scan.
+         * @param angle_min         Minimum possible angle.
+         * @param angle_max         Maximum possible angle.
+         * @param max_range         Maximum possible range reading.
+         * @param angle_increment   Change in angle between neighboring scan points.
          */
         Measurement(const uint8_t &num_sectors,
-                    const std::vector<MeasurementPoint> &measurements) : measurements_(measurements) {
+                    const std::vector<MeasurementPoint> &measurements, const float &angle_min,
+                    const float &angle_max, const float &max_range, const float &angle_increment) : num_sectors_(num_sectors), activated_sectors_(num_sectors),
+                    max_range_(max_range), angle_increment_(angle_increment), measurements_(measurements) {
             for (uint8_t sector_num = 0; sector_num < num_sectors; sector_num++) {
                 sector_activation_[sector_num] = true;
             }
         }
-
-        // TODO still not sure what constructor should look like
-        // Should it be responsible for assigning sectors to the measurement points?
 
         /**
          * Deactivate the given sector
@@ -128,10 +154,28 @@ namespace dpg_slam {
          */
         void deactivateSector(const uint8_t &sector_to_deactivate) {
             if (sector_activation_.find(sector_to_deactivate) != sector_activation_.end()) {
-                sector_activation_[sector_to_deactivate] = false;
+                if (sector_activation_[sector_to_deactivate]) {
+                    activated_sectors_--;
+                    sector_activation_[sector_to_deactivate] = false;
+                }
             } else {
                 ROS_ERROR("Tried to deactivate sector that doesn't exist");
             }
+        }
+
+        /**
+         * Set the label for the point with the given index.
+         *
+         * Also deactivates the relevant sector if the label is removed.
+         *
+         * @param point_index   Index of the point in the overall measurement.
+         * @param new_label     New label for the point.
+         */
+        void setPointLabel(const uint64_t &point_index, const PointLabel &new_label) {
+            if (new_label == REMOVED) {
+                deactivateSector(measurements_[point_index].getSectorNum());
+            }
+            measurements_[point_index].setLabel(new_label);
         }
 
         /**
@@ -141,6 +185,51 @@ namespace dpg_slam {
          */
         std::vector<MeasurementPoint> getMeasurements() const {
             return measurements_;
+        }
+
+        /**
+         * Get the percent of sectors that are active.
+         *
+         * @return Percent of sectors that are active.
+         */
+        float getPercentSectorsActive() const {
+            return ((float) activated_sectors_) / num_sectors_;
+        }
+
+        /**
+         * Get the measurement range for the measurement (angle min/max, relative to the laser frame).
+         *
+         * @return the measurement range for the measurement (angle min/max, relative to the laser frame).
+         */
+        std::pair<float, float> getMeasurementRange() const {
+            return std::make_pair(angle_min_, angle_max_);
+        }
+
+        /**
+         * Get the number of sectors.
+         *
+         * @return Number of sectors.
+         */
+        uint8_t getNumSectors() const {
+            return num_sectors_;
+        }
+
+        /**
+         * Get the maximum range of the lidar.
+         *
+         * @return maximum range of the lidar.
+         */
+        float getMaxRange() const {
+            return max_range_;
+        }
+
+        /**
+         * Get the angle between neighboring points in the scan.
+         *
+         * @return the angle between neighboring points in the scan.
+         */
+        float getAngleInc() const {
+            return angle_increment_;
         }
 
 	/*
@@ -155,6 +244,36 @@ namespace dpg_slam {
 	}
 
     private:
+
+        /**
+         * Number of sectors in the measurement.
+         */
+        uint8_t num_sectors_;
+
+        /**
+         * Number of activated sectors.
+         */
+        uint8_t activated_sectors_;
+
+        /**
+         * Minimum angle for the scan.
+         */
+        float angle_min_;
+
+        /**
+         * Maximum angle for the scan.
+         */
+        float angle_max_;
+
+        /**
+         * Maximum possible range for the scan.
+         */
+        float max_range_;
+
+        /**
+         * The angle between neighboring points in the scan.
+         */
+        float angle_increment_;
 
         /**
          * Vector of individual measurement points
