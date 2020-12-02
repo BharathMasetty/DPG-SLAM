@@ -3,6 +3,8 @@
 #include "gflags/gflags.h"
 #include <std_msgs/Empty.h>
 #include "dpg_slam/parameters.h"
+#include <mutex>
+#include <condition_variable>
 
 DEFINE_string(new_pass_topic, "/new_pass", "Name of ROS topic that when we've received a message indicates we're on a "
                                            "new pass");
@@ -19,9 +21,22 @@ const float kMitLaserXInBLFrame = 0.2; // TODO set this
 const float kMitLaserYInBLFrame = 0.0; // TODO set this
 const float kMitLaserOrientationRelBLFrame = 0.0; // TODO set this
 
+std::mutex reoptimization_done_mutex_;
+std::condition_variable reoptimization_done_cv_;
+bool dpg_ready_ = false;
+
 ros::Publisher new_pass_pub_;
 
+void ReoptimizationCompleteCallback(const std_msgs::Empty &empty_msg) {
+    {
+        std::lock_guard<std::mutex> lk(reoptimization_done_mutex_);
+        dpg_ready_ = true;
+    }
+    reoptimization_done_cv_.notify_one();
+}
+
 void playRosbag(const std::string &rosbag_name, const float &playback_rate, const float &start_time, const float &duration=-1.0) {
+    ROS_INFO_STREAM("Playing next rosbag");
     // TODO can we do this in the main thread or does it need to live in another thread
     std::string duration_string;
     if (duration > 0) {
@@ -31,8 +46,12 @@ void playRosbag(const std::string &rosbag_name, const float &playback_rate, cons
             + std::to_string(start_time) + " --topics /odom /scan /Cobot/Odometry /Cobot/Laser";
     ROS_INFO_STREAM("System result: " << system(run_cmd.c_str()));
     new_pass_pub_.publish(std_msgs::Empty());
-    ros::Duration(2).sleep();
+    std::unique_lock<std::mutex> lk(reoptimization_done_mutex_);
+    reoptimization_done_cv_.wait(lk, []{return dpg_ready_;});
+    ros::Duration(1).sleep();
 }
+
+
 
 /**
  * Set the parameters specific to the GDC data.
@@ -74,15 +93,15 @@ std::string getBagPath(const std::string &folder_name, const std::string &bag_na
 
 void runOnGdcRosBags() {
     // TODO consider adding duration to cut off the end of bags where we just go back and forth forever
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-32-29.bag"), 0.5, 13.0, 74.0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-35-41.bag"), 0.3, 7.0, 53.0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-32-29.bag"), 1.2, 13.0, 74);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-35-41.bag"), 0.7, 7.0, 53.0);
     // TODO add other files
 }
 
 void runOnMitRosBags() {
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 1.2, 25);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.7, 40, 300);
-    // TODO
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.7, 40, 290);
+    // TODO add other files
 }
 
 int main(int argc, char** argv) {
@@ -109,7 +128,12 @@ int main(int argc, char** argv) {
         ros::Duration(0.1).sleep();
     }
 
-    ros::AsyncSpinner spinner(5); // TODO do we need this to be this high?
+    ros::Subscriber optimization_done_sub = n.subscribe(
+            "reoptimization_complete",
+            1,
+            ReoptimizationCompleteCallback);
+
+    ros::AsyncSpinner spinner(2); // TODO do we need this to be this high?
     spinner.start();
     if (run_mit) {
         ROS_INFO_STREAM("Run on MIT dataset");

@@ -24,6 +24,83 @@ namespace dpg_slam {
         odom_initialized_ = false;
         first_scan_for_pass_ = true;
     	current_pass_nodes_.clear();
+
+        reoptimize();
+        ROS_INFO_STREAM("Done reoptimizing");
+    }
+
+    void DpgSLAM::reoptimize() {
+        graph_ = new NonlinearFactorGraph();
+        uint8_t pass_num = -1;
+        for (size_t i = 0; i < dpg_nodes_.size(); i++) {
+            DpgNode curr_node = dpg_nodes_[i];
+            if (curr_node.getPassNumber() != pass_num) {
+                Pose2 position_prior(0.0, 0.0, 0.0);
+                noiseModel::Diagonal::shared_ptr prior_noise =
+                        noiseModel::Diagonal::Sigmas(Vector3(pose_graph_parameters_.new_pass_x_std_dev_,
+                                                             pose_graph_parameters_.new_pass_y_std_dev_,
+                                                             pose_graph_parameters_.new_pass_theta_std_dev_));
+                graph_->add(PriorFactor<Pose2>(curr_node.getNodeNumber(), position_prior, prior_noise));
+                pass_num = curr_node.getPassNumber();
+            } else {
+
+                // Odometry constraint.
+
+                // Get the estimated position change since the last node due to odometry
+                std::pair<Vector2f, float> relative_loc_latest_pose = math_utils::inverseTransformPoint(
+                        odom_only_estimates_[i].first, odom_only_estimates_[i].second,
+                        odom_only_estimates_[i - 1].first, odom_only_estimates_[i - 1].second);
+                Vector2f odom_est_loc_displ = relative_loc_latest_pose.first;
+                float odom_est_angle_displ = relative_loc_latest_pose.second;
+
+                // Add an odometry constraint
+                float transl_std_dev = (pose_graph_parameters_.motion_model_transl_error_from_transl_ * (odom_est_loc_displ.norm())) +
+                                       (pose_graph_parameters_.motion_model_transl_error_from_rot_ * fabs(odom_est_angle_displ));
+                float rot_std_dev = (pose_graph_parameters_.motion_model_rot_error_from_transl_ * (odom_est_loc_displ.norm())) +
+                                    (pose_graph_parameters_.motion_model_rot_error_from_rot_ * fabs(odom_est_angle_displ));
+
+                // TODO should x and y standard deviation be different?
+                noiseModel::Diagonal::shared_ptr odometryNoise =
+                        noiseModel::Diagonal::Sigmas(Vector3(transl_std_dev , transl_std_dev, rot_std_dev));
+                Pose2 odometry_offset_est(odom_est_loc_displ.x(), odom_est_loc_displ.y(), odom_est_angle_displ);
+                if (pose_graph_parameters_.odometry_constraints_) {
+                    graph_->add(BetweenFactor<Pose2>(dpg_nodes_[i - 1].getNodeNumber(), curr_node.getNodeNumber(),
+                                                     odometry_offset_est, odometryNoise));
+                }
+
+            }
+
+            if (i == 0) {
+                continue;
+            }
+
+            DpgNode prev_node = dpg_nodes_[i - 1];
+            std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset;
+            bool converged = runIcp(prev_node, curr_node, successive_scan_offset); // TODO should we do anything with output?
+            if (!converged) {
+                ROS_ERROR_STREAM("Successive scan alignment didn't converge. Consider changing this to drop that scan");
+            }
+            addObservationConstraint(prev_node.getNodeNumber(), curr_node.getNodeNumber(), successive_scan_offset);
+
+            for (size_t j = 0; j < i - 1; j+= 1) {
+                DpgNode loop_closure_node = dpg_nodes_[j];
+
+                float node_dist = (loop_closure_node.getEstimatedPosition().first - curr_node.getEstimatedPosition().first).norm();
+                float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
+                        pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_ : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+
+                if (node_dist <= node_dist_threshold) {
+
+                    std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+                    if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
+                        addObservationConstraint(loop_closure_node.getNodeNumber(), curr_node.getNodeNumber(),
+                                                 non_successive_scan_offset);
+                    }
+                }
+            }
+
+        }
+        optimizeGraph();
     }
 
     void DpgSLAM::ObserveLaser(const std::vector<float>& ranges,
@@ -97,7 +174,7 @@ namespace dpg_slam {
                 // TODO should we also set the labels for all measurements in the first node to static since we won't
                 //  run DPG on them separately?
                 dpg_nodes_.push_back(new_node);
-		current_pass_nodes_.push_back(new_node);
+                current_pass_nodes_.push_back(new_node);
                 return false;
             } else {
 
@@ -144,6 +221,9 @@ namespace dpg_slam {
             updatePoseGraphObsConstraints(new_node);
         }
 
+        ROS_INFO_STREAM("Num edges " << graph_->size());
+        ROS_INFO_STREAM("Num nodes " << graph_->keys().size());
+
         // If we've gotten here, we should run DPG
         return true;
     }
@@ -170,8 +250,12 @@ namespace dpg_slam {
             if (dpg_nodes_.size() > 1) {
                 for (size_t i = 0; i < std::max((size_t) 0, dpg_nodes_.size() - 2); i++) {
                     DpgNode node = dpg_nodes_[i];
-                    if ((node.getEstimatedPosition().first - preceding_node.getEstimatedPosition().first).norm()
-                    <= pose_graph_parameters_.maximum_node_dist_scan_comparison_) {
+
+                    float node_dist = (node.getEstimatedPosition().first - preceding_node.getEstimatedPosition().first).norm();
+                    float node_dist_threshold = (node.getPassNumber() == preceding_node.getPassNumber()) ?
+                                                pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_ : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+
+                    if (node_dist <= node_dist_threshold) {
 //                        ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
 //                                                                     node.getEstimatedPosition().first.x() << ", "
 //                                                                     << node.getEstimatedPosition().first.y() << ", "
@@ -196,7 +280,12 @@ namespace dpg_slam {
             }
         }
         dpg_nodes_.push_back(new_node);
-	current_pass_nodes_.push_back(new_node);
+	    current_pass_nodes_.push_back(new_node);
+
+        optimizeGraph();
+    }
+
+    void DpgSLAM::optimizeGraph() {
 
         // Get initial estimates for each node based on their current estimated position
         // With the exception of the new node, this will be the estimate from the last GTSAM update
@@ -273,7 +362,7 @@ namespace dpg_slam {
         sin(est_angle_displ), cos(est_angle_displ), 0, est_loc_displ.y(),
         0, 0, 1, 0,
         0, 0, 0, 1;
-        ROS_INFO_STREAM("Transform guess " << transform_guess);
+//        ROS_INFO_STREAM("Transform guess " << transform_guess);
 
         // TODO should we pre-transform node2 based on what we can estimate from odometry and then combine that with
         //  the ICP output (as an attempt to give it an initial guess since it can't seem to do that on its own)

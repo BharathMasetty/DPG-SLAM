@@ -567,7 +567,7 @@ d2J_dxdc    d2J_dydc    d2J_dzdc   d2J_dadc   d2J_dbdc   d2J_dc2
 
 
     // TODO fix this.
-    ROS_INFO_STREAM("Setting output");
+//    ROS_INFO_STREAM("Setting output");
     // TODO probably take the variances from parameters while we're still fixing the main covariance piece.
     ICP_COV.resize(3, 3);
     ICP_COV << laser_x_variance, 0, 0,
@@ -575,7 +575,7 @@ d2J_dxdc    d2J_dydc    d2J_dzdc   d2J_dadc   d2J_dbdc   d2J_dc2
     0, 0, laser_theta_variance;
 
 
-    ROS_INFO_STREAM("Set ICP cov");
+//    ROS_INFO_STREAM("Set ICP cov");
 //
 //    std::cout << "\n\n********************** \n\n" << "6D ICP_COV = \n" << bigger_icp_cov <<"\n*******************\n\n"<< std::endl;
 //
