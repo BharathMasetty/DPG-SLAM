@@ -75,6 +75,11 @@ namespace dpg_slam {
          * Occupancy grid resolution when computing the submap coverage.
          */
         double occ_grid_resolution_;
+
+        /**
+         * Minimum percent of sectors that have to be active for a node to be active.
+         */
+        float minimum_percent_active_sectors_;
     };
 
     /**

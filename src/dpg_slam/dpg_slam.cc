@@ -377,10 +377,8 @@ namespace dpg_slam {
 //        ROS_INFO_STREAM("Use reciprocal correspondences " << icp.getUseReciprocalCorrespondences());
 
         // TODO are these in the right order or should they be swapped
-        pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud = node_1.getCachedPointCloudFromNode(
-                getLaserPositionRelativeToBaselink());
-        pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud = node_2.getCachedPointCloudFromNode(
-                getLaserPositionRelativeToBaselink());
+        pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud = node_1.getCachedPointCloudFromNode();
+        pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud = node_2.getCachedPointCloudFromNode();
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_1_cloud_downsampled;
         pcl::PointCloud<pcl::PointXYZ>::Ptr node_2_cloud_downsampled;
@@ -490,17 +488,14 @@ namespace dpg_slam {
 
         // Make a measurement point for each range reading within range and assign it a sector
         for (size_t i = 0; i < ranges.size(); i++) {
-            // TODO should we exclude points outside of range_max? Verify this
-            if (ranges[i] < range_max) {
-                uint8_t sector_num = i / points_in_sector; // TODO is this correct?
-                float angle = angle_inc * i + angle_min;
-                measurement_points.emplace_back(angle, ranges[i], sector_num);
-            }
+            uint8_t sector_num = i / points_in_sector; // TODO is this correct?
+            float angle = angle_inc * i + angle_min;
+            measurement_points.emplace_back(angle, ranges[i], sector_num, range_max);
         }
 
-        Measurement measurement(num_sectors, measurement_points);
+        Measurement measurement(num_sectors, measurement_points, angle_min, angle_max, range_max, angle_inc);
 
-        return DpgNode(init_pos, init_orientation, pass_number, node_number, measurement);
+        return DpgNode(init_pos, init_orientation, pass_number, node_number, measurement, getLaserPositionRelativeToBaselink());
     }
 
     void DpgSLAM::ObserveOdometry(const Vector2f& odom_loc,
@@ -551,8 +546,7 @@ namespace dpg_slam {
         int point_num = 0;
         for (size_t i = 0; i < dpg_nodes_.size(); i++) {
             DpgNode node = dpg_nodes_[i];
-            pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud = node.getCachedPointCloudFromNode(
-                    getLaserPositionRelativeToBaselink());
+            pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud = node.getCachedPointCloudFromNode();
 
             std::pair<Vector2f, float> node_pose = node.getEstimatedPosition();
             for (pcl::PointXYZ point : *point_cloud) {
@@ -676,21 +670,20 @@ namespace dpg_slam {
         std::vector<cellKey> unoccupiedCells;
         float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
         float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
-        float LaserAngle = pose_graph_parameters_.laser_orientation_rel_bl_frame_;
-        pcl::PointCloud<pcl::PointXYZ>::Ptr scan = node_.getCachedPointCloudFromNode(std::make_pair(Eigen::Vector2f(LaserX, LaserY), LaserAngle));
-        Vector2f LaserLocInBaseFrame(LaserX, LaserY);
 
-        Vector2f LaserInMapFrame(math_utils::transformPoint(LaserLocInBaseFrame, 0, nodePosition, nodeAngle).first);
+        std::pair<Vector2f, float> LaserInMapFrame =
+                math_utils::transformPoint(Vector2f(LaserX, LaserY),
+                                           pose_graph_parameters_.laser_orientation_rel_bl_frame_,
+                                           nodePosition, nodeAngle);
 
         // Assuming that the size of measurements_ vector at a node and what we get from getCachedPointCloud are the same
         for (uint32_t i =0; i<measurementsAtNode.size(); i++) {
             MeasurementPoint point = measurementsAtNode[i];
-            pcl::PointXYZ tempPoint = (*scan)[i];
-            Vector2f scanPoint(tempPoint.x, tempPoint.y);
+            Vector2f scanPoint = math_utils::transformPoint(point.getPointInLaserFrame(), 0, LaserInMapFrame.first, LaserInMapFrame.second).first;
             uint8_t sector_num = point.getSectorNum();
 
             if ((include_inactive_) || (scanMeasurementAtNode.isSectorActive(sector_num))) {
-                if ((include_static_ && (point.getLabel() == PointLabel::STATIC)) ||
+                if ((point.getLabel() == MAX_RANGE) || (include_static_ && (point.getLabel() == PointLabel::STATIC)) ||
                     (include_added_ && (point.getLabel() == PointLabel::ADDED)) || (point.getLabel() == PointLabel::REMOVED)) {
                     Eigen::Vector2f pointLocationInMapFrame(
                             math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
@@ -700,12 +693,16 @@ namespace dpg_slam {
                     min_cell_y_ = std::min(cell.second, min_cell_y_);
                     max_cell_y_ = std::max(cell.second, max_cell_y_);
 
-                    occupied_cell_info_[cell].points_.emplace_back(node.getNodeNumber(), i);
-                    occupiedCells.push_back(cell);
+                    if (point.getLabel() != MAX_RANGE) {
+
+                        occupied_cell_info_[cell].points_.emplace_back(node.getNodeNumber(), i);
+                        occupiedCells.push_back(cell);
+                    }
+
                     float range = point.getRange();
 
                     // Get Laser Line
-                    std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame,
+                    std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame.first,
                                                                                                         pointLocationInMapFrame,
                                                                                                         range);
                     unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(),
