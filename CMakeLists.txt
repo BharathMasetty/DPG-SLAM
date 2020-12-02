@@ -53,3 +53,6 @@ ROSBUILD_ADD_EXECUTABLE(dpg_slam
         src/dpg_slam/dpg_slam.cc src/dpg_slam/dpg_node.cc src/dpg_slam/math_utils.cc)
 TARGET_LINK_LIBRARIES(dpg_slam shared_library ${libs} tbb gtsam ${PCL_LIBRARIES})
 
+ROSBUILD_ADD_EXECUTABLE(dpg_data_runner src/runner/dpg_data_runner_main.cc)
+TARGET_LINK_LIBRARIES(dpg_data_runner shared_library ${libs})
+
