@@ -23,9 +23,9 @@ typedef std::pair<int, int> cellKey;
 
 enum CellStatus {UNKNOWN, FREE, OCCUPIED};
 
-struct PointInfoInCell {
-    PointInfoInCell(const uint64_t &node_num,
-                    const uint64_t &point_num_in_node) : node_num_(node_num), point_num_in_node_(point_num_in_node) {
+struct PointIdInfo {
+    PointIdInfo(const uint64_t &node_num,
+                const uint64_t &point_num_in_node) : node_num_(node_num), point_num_in_node_(point_num_in_node) {
 
     }
     uint64_t node_num_;
@@ -33,7 +33,7 @@ struct PointInfoInCell {
 };
 
 struct OccupiedCellInfo {
-    std::vector<PointInfoInCell> points_;
+    std::vector<PointIdInfo> points_;
 };
 
 namespace dpg_slam {
@@ -71,17 +71,44 @@ namespace dpg_slam {
         calculateOccupancyGrid();
     }
 
+    /**
+     * Get the occupancy value for the given cell key.
+     *
+     * @param cell_key  Cell key to get the occupancy value for.
+     *
+     * @return occupancy value for the given cell key.
+     */
+    CellStatus getCellStatus(const cellKey &cell_key) const {
+        if (gridInfo.find(cell_key) == gridInfo.end()) {
+            return UNKNOWN;
+        }
+        return gridInfo.at(cell_key);
+    }
 
         bool isCellOccupied(const DpgNode& node){
         
         //TODO: Fill in - Bharath
         return false;
     }
+
+    /**
+     * Get the points that contributed to the occupancy of a cell.
+     *
+     * @param cell_key  Cell key.
+     *
+     * @return Points that fall within the cell.
+     */
+    std::vector<PointIdInfo> getPointsInOccCell(const cellKey &cell_key) const {
+        if (occupied_cell_info_.find(cell_key) == occupied_cell_info_.end()) {
+            return {};
+        }
+        return occupied_cell_info_.at(cell_key).points_;
+    }
     
     /**
      * To access the gridInfo
      */
-    std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> getGridInfo(){
+    std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> getGridInfo() const {
         return gridInfo;
     }
 
@@ -99,7 +126,6 @@ namespace dpg_slam {
      */
     std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridInfo;
 
-    
     private:
     
         /**
@@ -396,6 +422,31 @@ namespace dpg_slam {
                              const float &range_max,
                              const float &angle_min,
                              const float &angle_max);
+
+        /**
+         * Detect and label changes for the current pose chain.
+         *
+         * @param current_submap_occ_grids[in]  Occupancy grids representing each one of the current pose chain nodes.
+         * @param local_submap_occ_grid[in]     Occupancy grid for the local submap. // TODO should this also be separated by
+         * @param removed_points[out]           Points that have been removed in this iteration of detecting and labeling.
+         */
+        void detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
+                                                      const occupancyGrid &local_submap_occ_grid,
+                                                      std::vector<PointIdInfo> &removed_points);
+
+        /**
+         * Detect and label the changes for the current pose chain node and the overlapping submap nodes.
+         *
+         * @param current_node_occ_grid[in] Current pose chain node's occupancy grid.
+         * @param local_submap_occ_grid[in] Local submap occupancy grid.
+         * @param added_points[out]         Points that were identified as added.
+         * @param removed_points[out]       Points that were identified as removed.
+         */
+        void detectAndLabelChangesForCurrentNode(
+                const occupancyGrid &current_node_occ_grid,
+                const occupancyGrid &local_submap_occ_grid,
+                std::vector<PointIdInfo> &added_points,
+                std::vector<PointIdInfo> &removed_points);
 
         /**
          * Update the underlying pose graph.

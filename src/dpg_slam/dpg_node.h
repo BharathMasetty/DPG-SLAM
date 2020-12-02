@@ -129,6 +129,16 @@ namespace dpg_slam {
          * @param min_active_sectors    Minimum percentage of active sectors for a node to still be active.
          */
         void deactivateIntersectingSectors(const std::vector<Eigen::Vector2f> &removed_points, const float &min_active_sectors);
+
+        /**
+         * Set the label for the point with the given index.
+         *
+         * @param point_index   Index of the point in the overall measurement.
+         * @param new_label     New label for the point.
+         */
+        void setPointLabel(const uint64_t &point_index, const PointLabel &new_label) {
+            measurement_.setPointLabel(point_index, new_label);
+        }
     	
 	/*
 	 * Check of the sector corresponding to a given measurement is active or not

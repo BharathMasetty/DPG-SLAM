@@ -164,6 +164,21 @@ namespace dpg_slam {
         }
 
         /**
+         * Set the label for the point with the given index.
+         *
+         * Also deactivates the relevant sector if the label is removed.
+         *
+         * @param point_index   Index of the point in the overall measurement.
+         * @param new_label     New label for the point.
+         */
+        void setPointLabel(const uint64_t &point_index, const PointLabel &new_label) {
+            if (new_label == REMOVED) {
+                deactivateSector(measurements_[point_index].getSectorNum());
+            }
+            measurements_[point_index].setLabel(new_label);
+        }
+
+        /**
          * Get the individual range measurements that compose this scan.
          *
          * @return individual range measurements that compose this scan.

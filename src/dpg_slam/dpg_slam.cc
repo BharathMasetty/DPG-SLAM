@@ -4,6 +4,7 @@
 #include "icp_cov/cov_func_point_to_point.h"
 #include <visualization/visualization.h>
 #include <ros/ros.h>
+#include <unordered_set>
 
 using namespace gtsam;
 using namespace Eigen;
@@ -625,6 +626,55 @@ namespace dpg_slam {
         //TODO: Bharath
 
         return dynamicMapPoints;
+    }
+
+
+    void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
+                                                           const occupancyGrid &local_submap_occ_grid,
+                                                           std::vector<PointIdInfo> &removed_points) {
+        std::vector<PointIdInfo> added_points;
+        std::vector<PointIdInfo> removed_points_non_deduped;
+
+        for (const occupancyGrid curr_node_grid : current_submap_occ_grids) {
+            detectAndLabelChangesForCurrentNode(curr_node_grid, local_submap_occ_grid, added_points,
+                                                removed_points_non_deduped);
+        }
+
+        for (const PointIdInfo &added_point : added_points) {
+            dpg_nodes_[added_point.node_num_].setPointLabel(added_point.point_num_in_node_, ADDED);
+        }
+
+        std::unordered_map<uint64_t, std::unordered_set<uint64_t>> removed_by_node_num;
+        for (const PointIdInfo &removed_point : removed_points_non_deduped) {
+            if (removed_by_node_num.find(removed_point.node_num_) == removed_by_node_num.end()) {
+                removed_by_node_num[removed_point.node_num_] = {};
+            }
+            removed_by_node_num[removed_point.node_num_].insert(removed_point.point_num_in_node_);
+        }
+
+        for (const auto &removed_for_node : removed_by_node_num) {
+            for (const uint64_t &removed_index : removed_for_node.second) {
+                dpg_nodes_[removed_index].setPointLabel(removed_index, REMOVED);
+                removed_points.emplace_back(PointIdInfo(removed_for_node.first, removed_index));
+            }
+        }
+    }
+
+     void DpgSLAM::detectAndLabelChangesForCurrentNode(
+            const occupancyGrid &current_node_occ_grid,
+            const occupancyGrid &local_submap_occ_grid,
+            std::vector<PointIdInfo> &added_points,
+            std::vector<PointIdInfo> &removed_points) {
+        for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
+            CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
+            if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
+                std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                added_points.insert(added_points.end(), new_added.begin(), new_added.end());
+            } else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
+                std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                removed_points.insert(removed_points.end(), new_removed.begin(), new_removed.end());
+            }
+        }
     }
 
     std::vector<DpgNode> DpgSLAM::updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints){
