@@ -321,6 +321,7 @@ namespace dpg_slam {
         if (est_transform(2, 2) != 1.0) {
             // TODO may want to check equality within some small bound rather than exact equality
             ROS_WARN_STREAM("Bottom entry in rotation matrix was not 1, which suggests non-zero pitch or roll: " << est_transform);
+            return false;
         }
 
         // Estimate the covariance
