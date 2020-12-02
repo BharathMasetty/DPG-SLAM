@@ -29,89 +29,88 @@ namespace dpg_slam {
     class occupancyGrid {
     public:
        
-	occupancyGrid(const std::vector<DpgNode> &Nodes):
-		Nodes_(Nodes){
-		calculateOccupancyGrid();
-		}
+    occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
+               const PoseGraphParameters &pose_graph_parameters) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
+               pose_graph_parameters_(pose_graph_parameters) {
+        calculateOccupancyGrid();
+    }
 
-	bool isCellOccupied(const DpgNode& node){
-		
-		//TODO: Fill in - Bharath
-		
-		return false;
-	}
-	
-	/*
-         * To access the gridInfo
-         */
-        std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> getGridInfo(){
-                return gridInfo;
-        }
+    bool isCellOccupied(const DpgNode& node){
+        
+        //TODO: Fill in - Bharath
+        return false;
+    }
+    
+    /**
+     * To access the gridInfo
+     */
+    std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> getGridInfo(){
+        return gridInfo;
+    }
 
-	/*
-         * Mapping from keys based on cell location in map to the boolean representing of there is a map point in the grid or not.
-         */
-	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridInfo;
+    /**
+     * Mapping from keys based on cell location in map to the boolean representing of there is a map point in the grid or not.
+     */
+    std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridInfo;
     
     private:
-	
-	/**
-     	 * Convert the dpg_node to ints based on resolution for occupancy grid.
-         */
-        cellKey convertToKeyForm(const Eigen::Vector2f& loc) const;
-		
-	/*
-	 * To fill in the occupancy grid based on input node vectors 
-	 */
-	void calculateOccupancyGrid();
+    
+    /**
+     * Convert the dpg_node to ints based on resolution for occupancy grid.
+     */
+     cellKey convertToKeyForm(const Eigen::Vector2f& loc) const;
+        
+    /*
+     * To fill in the occupancy grid based on input node vectors 
+     */
+    void calculateOccupancyGrid();
 
-	/*
-	 * For converting measurement point at a node to map frame
-	 */
-	void convertLaserRangeToCellKey(const DpgNode& node);
-	
-	/**
-	 * For getting the cells falling inside the foc of a node that are free.
-	 */
-	std::vector<cellKey> getIntermediateFreeCellsInFOV(const Eigen::Vector2f &LaserLoc, const Eigen::Vector2f &scanLoc,  const float& range);
+    /*
+     * For converting measurement point at a node to map frame
+     */
+    void convertLaserRangeToCellKey(const DpgNode& node);
+    
+    /**
+     * For getting the cells falling inside the foc of a node that are free.
+     */
+    std::vector<cellKey> getIntermediateFreeCellsInFOV(const Eigen::Vector2f &LaserLoc, const Eigen::Vector2f &scanLoc,  const float& range);
 
-	/*
-	 * For labling the occupied cells.
-	 *
-	 * @param vector of occupied cellKeys
-	 */
-	void setOccupiedCells(const std::vector<cellKey> &occupiedCells);
+    /*
+     * For labling the occupied cells.
+     *
+     * @param vector of occupied cellKeys
+     */
+    void setOccupiedCells(const std::vector<cellKey> &occupiedCells);
 
-	/*
-         * For labling the free cells.
-         *
-         * @param vector of free cellKeys
-         */
-        void setFreeCells(const std::vector<cellKey> &freeCells);
+    /**
+     * For labling the free cells.
+     *
+     * @param vector of free cellKeys
+     */
+    void setFreeCells(const std::vector<cellKey> &freeCells);
 
-	/*
-	 * Nodes for which the occupancy grid is to be made.
-	 */
-	std::vector<DpgNode> Nodes_;
+    /*
+     * Nodes for which the occupancy grid is to be made.
+     */
+    std::vector<DpgNode> Nodes_;
 
-	/*
-	 * DPG Parameters
-	 */
-	DpgParameters dpg_parameters_;
+    /*
+     * DPG Parameters
+     */
+    DpgParameters dpg_parameters_;
 
-	/**
-         * Pose graph parameters.
-         */
-        PoseGraphParameters pose_graph_parameters_;
+    /**
+     * Pose graph parameters
+     */
+    PoseGraphParameters pose_graph_parameters_;
     };
 
     /**
      * Data structure to define a map point in the active and dynamic maps.
      */
     struct dpgMapPoint{
-
-    	Eigen::Vector2f mapPoint;
- 	PointLabel label;
+        Eigen::Vector2f mapPoint;
+        PointLabel label;
     };
     
     class DpgSLAM {
@@ -147,14 +146,14 @@ namespace dpg_slam {
 
         // Get latest map.
         std::vector<Eigen::Vector2f> GetMap();
-	
-	/**
-	 * Get latest active map 
-	 */
-	std::vector<dpgMapPoint> GetActiveMap();
+    
+    /**
+     * Get latest active map 
+     */
+    std::vector<dpgMapPoint> GetActiveMap();
 
-	// Get latest dynamic map
-	std::vector<dpgMapPoint> GetDynamicMap();
+    // Get latest dynamic map
+    std::vector<dpgMapPoint> GetDynamicMap();
 
 
         // Get latest robot pose.
@@ -221,15 +220,10 @@ namespace dpg_slam {
          */
         uint32_t pass_number_;
 
-	/**
-	 * List of nodes in the current pass
-	 */
-	std::vector<DpgNode> current_pass_nodes_;
-
-	/**
-	 * 
-	 */
-	uint32_t kNumNodesInCurrentPass = 0;
+        /**
+         * List of nodes in the current pass
+         */
+        std::vector<DpgNode> current_pass_nodes_;
 
         /**
          * Latest odometry location reported.
@@ -414,55 +408,55 @@ namespace dpg_slam {
          */
         bool runIcp(DpgNode &node_1, DpgNode &node_2, std::pair<std::pair<Eigen::Vector2f, float>, Eigen::MatrixXd> &icp_results);
     
-     	/*
-	 * computes the local submapGrid and the currGrid
-	 * each map is an unordered map from keys in x,y to boolean which says if the grid is occupied or not (int, int)->bool
-	 * TODO: Need to figure out the data structure for occupancy grids/
-	 */
-	std::vector<occupancyGrid> computeLocalSubMap();
-	
-	/*
-	 * To find the nodes covering the occupancy map generated by current pose chain
-	 * @param occupancy grid made for current pose chain.
-	 * @return vector of nodes covering the current occupancy grid.
-	 */	
-	std::vector<DpgNode> getNodesCoveringCurrGrid(const occupancyGrid &currGrid);
+        /*
+         * computes the local submapGrid and the currGrid
+         * each map is an unordered map from keys in x,y to boolean which says if the grid is occupied or not (int, int)->bool
+         * TODO: Need to figure out the data structure for occupancy grids/
+         */
+        std::vector<occupancyGrid> computeLocalSubMap();
 
-	/*
-	 * To check if two occupancy grids overlap
-	 * @param Grid1
-	 * @param Grid2
-	 * @return boolean indicating if there is any intersection of feild of views.
-	 */
-	bool checkGridIntersection(const occupancyGrid &Grid1, const occupancyGrid &Grid2);
+        /*
+         * To find the nodes covering the occupancy map generated by current pose chain
+         * @param occupancy grid made for current pose chain.
+         * @return vector of nodes covering the current occupancy grid.
+         */
+        std::vector<DpgNode> getNodesCoveringCurrGrid(const occupancyGrid &currGrid);
 
-	/**
-	 * This method compares each cell in the currGrid to the corresponding cell is the submap.
-	 * @param currGrid 		occupancy grid of current pose chain obtained from computeLocalSubmap
-	 * @param submapGrid		occupancy grid of local submap obtained from computeLocalSubmap
-	 *
-	 * @return Vector of dynamic map points with associated labels for measurements in current Grid
-	 */
-	std::vector<dpgMapPoint> detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid);
+        /*
+         * To check if two occupancy grids overlap
+         * @param Grid1
+         * @param Grid2
+         * @return boolean indicating if there is any intersection of feild of views.
+         */
+        bool checkGridIntersection(const occupancyGrid &Grid1, const occupancyGrid &Grid2);
 
-	/**
-	 * @param removedPoints 	Points from the dynamic map points obtained from detectAndLabelChanges that
-	 * 				are labelled as "REMOVED".
-	 *
-	 * @return vector of inactive nodes.
-	 */
-	std::vector<DpgNode> updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints);
+        /**
+         * This method compares each cell in the currGrid to the corresponding cell is the submap.
+         * @param currGrid         occupancy grid of current pose chain obtained from computeLocalSubmap
+         * @param submapGrid        occupancy grid of local submap obtained from computeLocalSubmap
+         *
+         * @return Vector of dynamic map points with associated labels for measurements in current Grid
+         */
+        std::vector<dpgMapPoint> detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid);
 
-	/**
-	 * Method to delete inactive nodes from dpg graph
-	 * NOTE: This is not a top priority.
-	 */
-	void reduceDPGSize();
-	
-    	/**
-	 * Main execution Loop for DPG
-	 */
-	void updateDPG();	
+        /**
+         * @param removedPoints     Points from the dynamic map points obtained from detectAndLabelChanges that
+         *                 are labelled as "REMOVED".
+         *
+         * @return vector of inactive nodes.
+         */
+        std::vector<DpgNode> updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints);
+
+        /**
+         * Method to delete inactive nodes from dpg graph
+         * NOTE: This is not a top priority.
+         */
+        void reduceDPGSize();
+
+            /**
+         * Main execution Loop for DPG
+         */
+        void updateDPG();
     
     };
 }  // end dpg_slam

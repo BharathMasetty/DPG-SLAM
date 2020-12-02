@@ -518,10 +518,10 @@ namespace dpg_slam {
 		currPoseChain.assign(current_pass_nodes_.end()-maxNumNodes, current_pass_nodes_.end());
 	}
 	
-	occupancyGrid currGrid(currPoseChain);
+	occupancyGrid currGrid(currPoseChain, dpg_parameters_, pose_graph_parameters_);
 	// Grid for FOV nodes
 	std::vector<DpgNode> fovNodes = getNodesCoveringCurrGrid(currGrid);
-	occupancyGrid subMapGrid(fovNodes);
+	occupancyGrid subMapGrid(fovNodes, dpg_parameters_, pose_graph_parameters_);
 
 	std::vector<occupancyGrid> grids{currGrid, subMapGrid};
         return grids;
@@ -591,12 +591,16 @@ namespace dpg_slam {
 	float LaserAngle = pose_graph_parameters_.laser_orientation_rel_bl_frame_;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr scan = node_.getCachedPointCloudFromNode(std::make_pair(Eigen::Vector2f(LaserX, LaserY), LaserAngle));	
 	Vector2f LaserLocInBaseFrame(LaserX, LaserY);
+
+	Vector2f LaserInMapFrame(math_utils::transformPoint(LaserLocInBaseFrame, 0, nodePosition, nodeAngle).first);
+
 	// Assuming that the size of measurements_ vector at a node and what we get from getCachedPointCloud are the same
 	for (uint32_t i =0; i<measurementsAtNode.size(); i++) {
 		MeasurementPoint point = measurementsAtNode[i];
 		pcl::PointXYZ tempPoint = (*scan)[i];
 		Vector2f scanPoint(tempPoint.x, tempPoint.y); 
 		uint8_t sector_num = point.getSectorNum();
+
 		
 		if (scanMeasurementAtNode.isSectorActive(sector_num)){
 			Eigen::Vector2f pointLocationInMapFrame(math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
@@ -605,7 +609,6 @@ namespace dpg_slam {
 		 	float range = point.getRange();
 			
 			// Get Laser Line
-			Vector2f LaserInMapFrame(math_utils::transformPoint(LaserLocInBaseFrame, 0, nodePosition, nodeAngle).first);
 			std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame, pointLocationInMapFrame, range);
 			unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(), emptyCellsbetweenLaserAndPoint.end());		
 		}
