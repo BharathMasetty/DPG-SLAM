@@ -268,6 +268,20 @@ namespace dpg_slam {
         std::vector<std::pair<Eigen::Vector2f, float>> odom_only_estimates_;
 
         /**
+         * Reoptimize the poses.
+         *
+         * This is an expensive operation where we recompute the scan constraints using the offset between the
+         * estimated pose (instead of using odometry as a seed). This is used between passes to clean up constraints
+         * that reflect poor ICP alignment.
+         */
+        void reoptimize();
+
+        /**
+         * Optimize the pose graph and update the estimated poses in the nodes.
+         */
+        void optimizeGraph();
+
+        /**
          * Determine if the robot has moved far enough that we should compare the last used laser scan to the current
          * laser scan.
          *
