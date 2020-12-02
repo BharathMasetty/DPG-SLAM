@@ -650,7 +650,7 @@ namespace dpg_slam {
         // Filling up the occupancy grid for each node.
         for(uint32_t i=0; i<Nodes_.size(); i++){
             DpgNode node = Nodes_[i];
-            if (node.isNodeActive()){
+            if (include_inactive_ || node.isNodeActive()) {
                 convertLaserRangeToCellKey(node);
             }
         }
@@ -689,16 +689,28 @@ namespace dpg_slam {
             Vector2f scanPoint(tempPoint.x, tempPoint.y);
             uint8_t sector_num = point.getSectorNum();
 
+            if ((include_inactive_) || (scanMeasurementAtNode.isSectorActive(sector_num))) {
+                if ((include_static_ && (point.getLabel() == PointLabel::STATIC)) ||
+                    (include_added_ && (point.getLabel() == PointLabel::ADDED)) || (point.getLabel() == PointLabel::REMOVED)) {
+                    Eigen::Vector2f pointLocationInMapFrame(
+                            math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
+                    cellKey cell = convertToKeyForm(pointLocationInMapFrame);
+                    max_cell_x_ = std::max(cell.first, max_cell_x_);
+                    min_cell_x_ = std::min(cell.first, min_cell_x_);
+                    min_cell_y_ = std::min(cell.second, min_cell_y_);
+                    max_cell_y_ = std::max(cell.second, max_cell_y_);
 
-            if (scanMeasurementAtNode.isSectorActive(sector_num)){
-                Eigen::Vector2f pointLocationInMapFrame(math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
-                        cellKey cell = convertToKeyForm(pointLocationInMapFrame);
-                        occupiedCells.push_back(cell);
-                 float range = point.getRange();
+                    occupied_cell_info_[cell].points_.emplace_back(node.getNodeNumber(), i);
+                    occupiedCells.push_back(cell);
+                    float range = point.getRange();
 
-                // Get Laser Line
-                std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame, pointLocationInMapFrame, range);
-                unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(), emptyCellsbetweenLaserAndPoint.end());
+                    // Get Laser Line
+                    std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame,
+                                                                                                        pointLocationInMapFrame,
+                                                                                                        range);
+                    unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(),
+                                           emptyCellsbetweenLaserAndPoint.end());
+                }
             }
         }
 
@@ -722,6 +734,34 @@ namespace dpg_slam {
         }
     }
 
+    void occupancyGrid::toOccGridMsg(nav_msgs::OccupancyGrid &occ_grid_msg, bool distinguish_free) {
+        occ_grid_msg.info.resolution = dpg_parameters_.occ_grid_resolution_;
+        occ_grid_msg.info.width = max_cell_x_ - min_cell_x_;
+        occ_grid_msg.info.height = max_cell_y_ - min_cell_y_;
+
+        occ_grid_msg.info.origin.orientation.w = 1;
+        occ_grid_msg.info.origin.position.x = min_cell_x_ * occ_grid_msg.info.resolution;
+        occ_grid_msg.info.origin.position.y = min_cell_y_ * occ_grid_msg.info.resolution;
+
+        occ_grid_msg.header.frame_id = "map";
+
+
+        occ_grid_msg.data.resize(occ_grid_msg.info.width * occ_grid_msg.info.height);
+        for (size_t i = 0; i < occ_grid_msg.data.size(); i++) {
+            occ_grid_msg.data[i] = -1;
+        }
+
+        for (const auto &cell_info : gridInfo) {
+            cellKey cell_pos = cell_info.first;
+            int data_index = (cell_pos.first - min_cell_x_) + (occ_grid_msg.info.width * (cell_pos.second - min_cell_y_));
+            if (cell_info.second == OCCUPIED) {
+                occ_grid_msg.data[data_index] = 100;
+            } else if ((cell_info.second == FREE) && (distinguish_free)) {
+                occ_grid_msg.data[data_index] = 0;
+            }
+        }
+    }
+
     std::vector<cellKey> occupancyGrid::getIntermediateFreeCellsInFOV(const Eigen::Vector2f &LaserLoc, const Eigen::Vector2f &scanLoc, const float& range) {
         /* Dividing the range line into bins and calculating the intermediate points on the
          * scan line using the parametric line equation. The we identify the cellKey for the
@@ -734,8 +774,8 @@ namespace dpg_slam {
         std::vector<cellKey> unOccupiedCells;
         float startX = LaserLoc.x();
         float startY = LaserLoc.y();
-        float endX  = LaserLoc.x();
-        float endY = LaserLoc.y();
+        float endX  = scanLoc.x();
+        float endY = scanLoc.y();
         // Might need to alter this resolution
         uint32_t num_bins = round(range/(dpg_parameters_.occ_grid_resolution_));
         float increment = 1.0/num_bins;

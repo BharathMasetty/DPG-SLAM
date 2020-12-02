@@ -17,9 +17,24 @@
 #include <amrl_msgs/VisualizationMsg.h>
 #include <boost/functional/hash.hpp>
 
+#include <nav_msgs/OccupancyGrid.h>
+
 typedef std::pair<int, int> cellKey;
 
 enum CellStatus {UNKNOWN, FREE, OCCUPIED};
+
+struct PointInfoInCell {
+    PointInfoInCell(const uint64_t &node_num,
+                    const uint64_t &point_num_in_node) : node_num_(node_num), point_num_in_node_(point_num_in_node) {
+
+    }
+    uint64_t node_num_;
+    uint64_t point_num_in_node_;
+};
+
+struct OccupiedCellInfo {
+    std::vector<PointInfoInCell> points_;
+};
 
 namespace dpg_slam {
     
@@ -31,11 +46,33 @@ namespace dpg_slam {
        
     occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
                const PoseGraphParameters &pose_graph_parameters) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
-               pose_graph_parameters_(pose_graph_parameters) {
+               pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true) {
         calculateOccupancyGrid();
     }
 
-    bool isCellOccupied(const DpgNode& node){
+    /**
+     * Alternate constructor that will allow us to visualize the results as an occupancy grid.
+     *
+     * @param Nodes                     Nodes to convert to an occupancy grid.
+     * @param dpg_parameters            DPG specific parameters.
+     * @param pose_graph_parameters     General pose graph parameters.
+     * @param include_inactive          Set to true if the occupancy grid should include inactive (including removed)
+     *                                  points, false if it should only include things that would be in the active map.
+     * @param include_added             Set to true if the occupancy grid should include added points.
+     * @param include_static            Set to true if the occupancy grid should include static points.
+     */
+    occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
+                  const PoseGraphParameters &pose_graph_parameters, const bool include_inactive,
+                  const bool include_added, const bool include_static) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
+                  pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
+                  min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(include_inactive),
+                  include_added_(include_added), include_static_(include_static) {
+        calculateOccupancyGrid();
+    }
+
+
+        bool isCellOccupied(const DpgNode& node){
         
         //TODO: Fill in - Bharath
         return false;
@@ -49,60 +86,109 @@ namespace dpg_slam {
     }
 
     /**
+     * Convert this to an ocupancy grid message so we can publish it.
+     *
+     * @param occ_grid_msg[out]     Occupancy grid message to populate.
+     * @param distinguish_free[in]  True if we should add free cells as well as occupied cells (will be true for
+     * visualizing submap, will be false when we want to get the occ grid for the different results layers).
+     */
+    void toOccGridMsg(nav_msgs::OccupancyGrid &occ_grid_msg, bool distinguish_free);
+
+    /**
      * Mapping from keys based on cell location in map to the boolean representing of there is a map point in the grid or not.
      */
     std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridInfo;
+
     
     private:
     
-    /**
-     * Convert the dpg_node to ints based on resolution for occupancy grid.
-     */
-     cellKey convertToKeyForm(const Eigen::Vector2f& loc) const;
-        
-    /*
-     * To fill in the occupancy grid based on input node vectors 
-     */
-    void calculateOccupancyGrid();
+        /**
+         * Convert the dpg_node to ints based on resolution for occupancy grid.
+         */
+         cellKey convertToKeyForm(const Eigen::Vector2f& loc) const;
 
-    /*
-     * For converting measurement point at a node to map frame
-     */
-    void convertLaserRangeToCellKey(const DpgNode& node);
-    
-    /**
-     * For getting the cells falling inside the foc of a node that are free.
-     */
-    std::vector<cellKey> getIntermediateFreeCellsInFOV(const Eigen::Vector2f &LaserLoc, const Eigen::Vector2f &scanLoc,  const float& range);
+        /*
+         * To fill in the occupancy grid based on input node vectors
+         */
+        void calculateOccupancyGrid();
 
-    /*
-     * For labling the occupied cells.
-     *
-     * @param vector of occupied cellKeys
-     */
-    void setOccupiedCells(const std::vector<cellKey> &occupiedCells);
+        /*
+         * For converting measurement point at a node to map frame
+         */
+        void convertLaserRangeToCellKey(const DpgNode& node);
 
-    /**
-     * For labling the free cells.
-     *
-     * @param vector of free cellKeys
-     */
-    void setFreeCells(const std::vector<cellKey> &freeCells);
+        /**
+         * For getting the cells falling inside the foc of a node that are free.
+         */
+        std::vector<cellKey> getIntermediateFreeCellsInFOV(const Eigen::Vector2f &LaserLoc, const Eigen::Vector2f &scanLoc,  const float& range);
 
-    /*
-     * Nodes for which the occupancy grid is to be made.
-     */
-    std::vector<DpgNode> Nodes_;
+        /*
+         * For labling the occupied cells.
+         *
+         * @param vector of occupied cellKeys
+         */
+        void setOccupiedCells(const std::vector<cellKey> &occupiedCells);
 
-    /*
-     * DPG Parameters
-     */
-    DpgParameters dpg_parameters_;
+        /**
+         * For labling the free cells.
+         *
+         * @param vector of free cellKeys
+         */
+        void setFreeCells(const std::vector<cellKey> &freeCells);
 
-    /**
-     * Pose graph parameters
-     */
-    PoseGraphParameters pose_graph_parameters_;
+
+        std::unordered_map<cellKey, OccupiedCellInfo, boost::hash<cellKey>> occupied_cell_info_;
+
+        /*
+         * Nodes for which the occupancy grid is to be made.
+         */
+        std::vector<DpgNode> Nodes_;
+
+        /*
+         * DPG Parameters
+         */
+        DpgParameters dpg_parameters_;
+
+        /**
+         * Pose graph parameters
+         */
+        PoseGraphParameters pose_graph_parameters_;
+
+        /**
+         * Minimum value for the x part of the key. Provides occ grid range.
+         */
+        int min_cell_x_;
+
+        /**
+         * Maximum value for the x part of the key. Provides occ grid range.
+         */
+        int max_cell_x_;
+
+        /**
+         * Minimum value for the y part of the key. Provides occ grid range.
+         */
+        int min_cell_y_;
+
+        /**
+         * Maximum value for the y part of the key. Provides occ grid range.
+         */
+        int max_cell_y_;
+
+        /**
+         * Set to true if the occupancy grid should include inactive (including removed) points, false if it should
+         * only include things that would be in the active map.
+         */
+        bool include_inactive_;
+
+        /**
+         * Set to true if the occupancy grid should include added points.
+         */
+        bool include_added_;
+
+        /**
+         * Set to true if the occupancy grid should include static points.
+         */
+        bool include_static_;
     };
 
     /**
