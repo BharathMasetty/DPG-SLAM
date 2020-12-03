@@ -134,7 +134,9 @@ namespace dpg_slam {
             return;
         }
 
-        // TODO DPG processing
+	ROS_INFO_STREAM("DPG Execution Start");
+	if (pass_number_ > 1)
+		executeDPG();
     }
 
     void DpgSLAM::publishTrajectory(amrl_msgs::VisualizationMsg &vis_msg) {
@@ -599,7 +601,7 @@ namespace dpg_slam {
         return map;
     }
 
-    std::vector<occupancyGrid> DpgSLAM::computeLocalSubMap(){
+    std::pair<std::vector<occupancyGrid>, occupancyGrid> DpgSLAM::computeLocalSubMap(){
     
         // Grid of current Pose chain
         std::vector<DpgNode> currPoseChain;
@@ -613,32 +615,104 @@ namespace dpg_slam {
             currPoseChain.assign(current_pass_nodes_.end()-maxNumNodes, current_pass_nodes_.end());
         }
 
-        occupancyGrid currGrid(currPoseChain, dpg_parameters_, pose_graph_parameters_);
-        // Grid for FOV nodes
-        std::vector<DpgNode> fovNodes = getNodesCoveringCurrGrid(currGrid);
-        occupancyGrid subMapGrid(fovNodes, dpg_parameters_, pose_graph_parameters_);
+	ROS_INFO_STREAM("Current Pose Chain Created, size: " << currPoseChain.size());
 
-        std::vector<occupancyGrid> grids{currGrid, subMapGrid};
-        return grids;
+	// create occupancy grids for nodes in current pose chain
+	std::vector<occupancyGrid> currPoseChainGrids;
+	for (uint32_t i=0; i< currPoseChain.size(); i++) {
+	    DpgNode currNode = currPoseChain[i];
+	    currPoseChainGrids.emplace_back(currNode, dpg_parameters_, pose_graph_parameters_);
+	}
+	
+	ROS_INFO_STREAM("Occupancy Grids Created for Current Pose Chain Nodes, size: " << currPoseChainGrids.size());
+
+        // Grid for FOV nodes
+        occupancyGrid localSubMapGrid = getSubMapCoveringCurrPoseChain(currPoseChain, currPoseChainGrids);
+	
+	return std::make_pair(currPoseChainGrids, localSubMapGrid);
     }
     
-    std::vector<DpgNode> DpgSLAM::getNodesCoveringCurrGrid(const occupancyGrid& currGrid) {
-        std::vector<DpgNode> FovNodes;
-        for (uint32_t i=0; i<(dpg_nodes_.size()-current_pass_nodes_.size()); i++) {
-            // TODO: FIll in
-        }
-        return FovNodes;
+    occupancyGrid DpgSLAM::getSubMapCoveringCurrPoseChain(const std::vector<DpgNode> &poseChain, 
+		    						const std::vector<occupancyGrid> &poseChainGrids) {
+	
+	occupancyGrid subMapOccupancyGrid(dpg_parameters_, pose_graph_parameters_);
+	std::unordered_set<cellKey, boost::hash<cellKey>> currentUncoveredCells;
+	bool isLocalSubmapInitialized = false;
+
+	// populate the list of uncovered cells
+	for (uint32_t i=0; i<poseChainGrids.size(); i++) {
+		std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> currNodeGridInfo = poseChainGrids[i].getGridInfo();
+		for (const auto &kv : currNodeGridInfo) { 
+			currentUncoveredCells.insert(kv.first);
+		}
+	}
+	uint64_t totalUncoveredCells = currentUncoveredCells.size();
+	uint64_t currentUncoveredCellsSize  = currentUncoveredCells.size();
+	
+	// compute submap that covers the currentUncoveredCells
+	// Get max laser range
+	float proximityThreshold = dpg_parameters_.distance_threshold_for_local_submap_nodes_;
+	float coverageThreshold = dpg_parameters_.current_pose_graph_coverage_threshold_;
+
+	for (uint32_t j=0; j<(dpg_nodes_.size()-current_pass_nodes_.size()); j++) { 
+		
+		DpgNode pastNode = dpg_nodes_[j];
+                std::pair<Vector2f, float> pastNodeInfo = pastNode.getEstimatedPosition();
+                Vector2f pastNodePosition = pastNodeInfo.first;
+		// checking if the past node is close to any of the current nodes.
+		bool isInProximity = false;
+		for (uint32_t i=0; i<poseChain.size(); i++) {
+			DpgNode currNode = poseChain[i];
+                	std::pair<Vector2f, float> currentNodeInfo = currNode.getEstimatedPosition();
+               		Vector2f currentNodePosition = currentNodeInfo.first;
+			float distanceToPastNode = (currentNodePosition - pastNodePosition).norm();
+			if (distanceToPastNode <= proximityThreshold)
+				isInProximity = true;
+			if (isInProximity)
+				break;
+		}		
+		
+		if (!isInProximity)
+			continue;	
+
+		if (!isLocalSubmapInitialized) {
+			occupancyGrid tempCombinedGrid(dpg_nodes_[j], dpg_parameters_, pose_graph_parameters_);
+			getUpdatedCoverageForCurrentPoseChain(currentUncoveredCells, tempCombinedGrid);
+			uint32_t newCurrentUncoveredCellsSize  = currentUncoveredCells.size();
+			if (newCurrentUncoveredCellsSize < currentUncoveredCellsSize) {
+                        	subMapOccupancyGrid = tempCombinedGrid;
+                        	isLocalSubmapInitialized = true;
+                        	currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
+                	}
+		} else{
+			occupancyGrid tempGrid(dpg_nodes_[j], dpg_parameters_, pose_graph_parameters_);
+                        occupancyGrid tempCombinedGrid(subMapOccupancyGrid, tempGrid, dpg_parameters_, pose_graph_parameters_);
+			getUpdatedCoverageForCurrentPoseChain(currentUncoveredCells, tempCombinedGrid);
+			uint32_t newCurrentUncoveredCellsSize  = currentUncoveredCells.size();
+			if (newCurrentUncoveredCellsSize < currentUncoveredCellsSize) {
+				subMapOccupancyGrid = tempCombinedGrid;
+				currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
+			}
+		}
+
+		double currentCoverage = 1 - currentUncoveredCellsSize/totalUncoveredCells;
+		if (currentCoverage >= coverageThreshold)
+			break;
+	}
+        
+	return subMapOccupancyGrid;
+    } 
+
+    void DpgSLAM::getUpdatedCoverageForCurrentPoseChain(std::unordered_set<cellKey, boost::hash<cellKey>> &currentUncoveredCells,
+		    				       const occupancyGrid &localSubMap) {
+	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> subMapGridInfo = localSubMap.getGridInfo();
+	for (const auto& uncoveredCell : currentUncoveredCells) {
+		if(subMapGridInfo.find(uncoveredCell) != subMapGridInfo.end()) {
+			// if the key exists in local submap- erase from uncovered cells set.
+			currentUncoveredCells.erase(uncoveredCell);
+		}
+	}	
     }
-
-    std::vector<dpgMapPoint> DpgSLAM::detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid){
-
-        std::vector<dpgMapPoint> dynamicMapPoints;
-        //TODO: Implement Alg. 1 from the paper.
-        //TODO: Bharath
-
-        return dynamicMapPoints;
-    }
-
 
     void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
                                                            const occupancyGrid &local_submap_occ_grid,
@@ -676,25 +750,65 @@ namespace dpg_slam {
             const occupancyGrid &local_submap_occ_grid,
             std::vector<PointIdInfo> &added_points,
             std::vector<PointIdInfo> &removed_points) {
-        for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
-            CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
-            if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
-                std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
-                added_points.insert(added_points.end(), new_added.begin(), new_added.end());
-            } else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
-                std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
-                removed_points.insert(removed_points.end(), new_removed.begin(), new_removed.end());
+		
+	 std::vector<PointIdInfo> added_points_at_current_node;
+	 std::vector<PointIdInfo> removed_points_at_current_node;
+	 bool commitChanges = false;
+         
+	 for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
+             CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
+             if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
+                   std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                   added_points_at_current_node.insert(added_points_at_current_node.end(), new_added.begin(), new_added.end());
+		   ROS_INFO_STREAM("Added");
+            	} else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
+                   std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                   removed_points_at_current_node.insert(removed_points_at_current_node.end(), new_removed.begin(), new_removed.end());
+		   ROS_INFO_STREAM("Removed");
+            	}
             }
-        }
+ 	 
+	 // if newly detected changes at node are non zero, check the score.
+	 if (added_points_at_current_node.size()+removed_points_at_current_node.size() > 0) {
+	 	commitChanges = computeBinScoreAndCommitLabelsForNode(added_points_at_current_node,
+									   removed_points_at_current_node);
+	 }
+	 if (!commitChanges) {
+		return;
+	 }
+
+	 // commit changes if we get here.
+	 added_points.insert(added_points.end(), added_points_at_current_node.begin(), added_points_at_current_node.end());
+	 removed_points.insert(removed_points.end(), removed_points_at_current_node.begin(), removed_points_at_current_node.end());
     }
 
-    std::vector<DpgNode> DpgSLAM::updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints){
+    bool DpgSLAM::computeBinScoreAndCommitLabelsForNode(const std::vector<PointIdInfo> &added_points,
+		    					const std::vector<PointIdInfo> &removed_points) {
 
-        std::vector<DpgNode> inactiveNodes;
-        //TODO: Implement Alg. 2 from the paper.
+         uint16_t totalBins = dpg_parameters_.num_bins_for_change_detection_;
+	 double change_threshold = dpg_parameters_.delta_change_threshold_;
+	 std::vector<uint16_t> changedBins;
+	 bool commitChanges = false;
+	 double current_changed_ratio = 0.0;
+	 std::vector<PointIdInfo> changedPoints = added_points;
+	 changedPoints.insert(changedPoints.end(), removed_points.begin(), removed_points.end());
 
+	 // I know this looks messy but could not think of a better way to get total number of points at a node.
+	 uint64_t node_num = changedPoints.back().node_num_;
+	 uint32_t totalPointsAtNode = dpg_nodes_[node_num].getMeasurement().getMeasurements().size();
 
-        return inactiveNodes;
+	 for (uint32_t i=0; i< changedPoints.size(); i++) {
+	 	uint32_t binNumber = round(totalBins*changedPoints[i].point_num_in_node_/totalPointsAtNode);
+		if (std::find(changedBins.begin(), changedBins.end(), binNumber) == changedBins.end()) {
+			changedBins.push_back(binNumber);
+		}
+		current_changed_ratio = changedBins.size()/totalBins;
+		if (current_changed_ratio >= change_threshold) {
+			commitChanges = true;
+			break;
+		}	
+	 }
+	 return commitChanges;
     }
 
     void DpgSLAM::getActiveAndDynamicMapPoints(std::vector<Vector2f> &active_static_points, std::vector<Vector2f> &active_added_points,
@@ -724,10 +838,52 @@ namespace dpg_slam {
                 }
             }
         }
+	ROS_INFO_STREAM("Active static Map Size: " << active_static_points.size());
+	ROS_INFO_STREAM("Active added Map Size: " << active_added_points.size());
+	ROS_INFO_STREAM("Dynamic added Map Size: " << dynamic_added_points.size());
+	ROS_INFO_STREAM("Dynamic removed Map Size: " << dynamic_removed_points.size());
     }
 
-    void DpgSLAM::updateDPG(){
-        // TODO: Fill-in
+    void DpgSLAM::executeDPG(){
+	// Should we do this only once??
+	std::pair<std::vector<occupancyGrid>, occupancyGrid> Grids = computeLocalSubMap();
+	ROS_INFO_STREAM("Occupancy Grids Created");
+	std::vector<occupancyGrid> currentPoseChainGrids = Grids.first;
+	occupancyGrid localSubMapGrid = Grids.second;
+	std::vector<PointIdInfo> removedPoints;
+	detectAndLabelChangesForCurrentPoseChain(currentPoseChainGrids, localSubMapGrid, removedPoints);
+	ROS_INFO_STREAM("Changes are Detected and Updated");
+	updateNodesAndSectorStatus(removedPoints);
+	ROS_INFO_STREAM("Deactivated sectors intersecting with removed points");
+
+
+    }
+
+    void DpgSLAM::updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints) {
+   		
+     	   // gather removed points in cartisian frame
+	   std::vector<Vector2f> removedVector;
+	   for(const PointIdInfo& point : removedPoints){
+	   	DpgNode node = dpg_nodes_[point.node_num_];
+		std::pair<Eigen::Vector2f, float> NodeInfo = node.getEstimatedPosition();
+		Vector2f NodeLocation = NodeInfo.first;
+		float NodeAngle = NodeInfo.second;
+		std::pair<Vector2f, float> lidar_pose_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
+                                                                                     	NodeLocation, NodeAngle);
+		std::vector<MeasurementPoint> ranges = node.getMeasurement().getMeasurements();
+		float range = ranges[point.point_num_in_node_].getRange();
+		float angle = ranges[point.point_num_in_node_].getAngle();
+		Vector2f PointInLaserFrame(range*cos(angle), range*sin(angle));
+		Vector2f pointInMapFrame = math_utils::transformPoint(PointInLaserFrame, 0,  lidar_pose_in_map.first, lidar_pose_in_map.second).first; 
+		removedVector.push_back(pointInMapFrame);
+				
+
+	   }
+
+	   float min_frac_sectors_active = dpg_parameters_.minimum_percent_active_sectors_; 
+	   for (uint32_t i=0; i<(dpg_nodes_.size()-current_pass_nodes_.size()); i++) {
+	   	dpg_nodes_[i].deactivateIntersectingSectors(removedVector, min_frac_sectors_active); 	
+	   } 
     }
 
     void occupancyGrid::calculateOccupancyGrid(){
@@ -746,6 +902,31 @@ namespace dpg_slam {
 
         cellKey cell_loc = std::make_pair(key_form_x, key_form_y);
         return cell_loc;
+    }
+
+    void occupancyGrid::combineOccupancyGrids(const occupancyGrid &grid1, const occupancyGrid &grid2) {
+   		 
+   	gridInfo = grid1.gridInfo;	
+    	occupied_cell_info_ = grid1.occupied_cell_info_;
+	std::unordered_map<cellKey, OccupiedCellInfo, boost::hash<cellKey>> occupied_cell_info2 = grid2.occupied_cell_info_;
+	
+	// Insert elements of second grid appropriately.
+	for (const auto &occ_grid_entry : grid2.gridInfo) {
+		cellKey key = occ_grid_entry.first;
+		CellStatus value = occ_grid_entry.second;
+		 OccupiedCellInfo cellInfoValue = occupied_cell_info2[key];
+		// Returns false if key is common so we can handle it seperately.
+		bool isNewCell = gridInfo.emplace(key, value).second;
+		occupied_cell_info_.emplace(key, cellInfoValue);
+		// Handle common cells by prioritizing OCCUPIED
+		if (!isNewCell)	{
+			if (value == OCCUPIED){
+				gridInfo[key] = value;
+				occupied_cell_info_[key] = cellInfoValue;
+			}
+		}
+	
+	}
     }
 
     void occupancyGrid::convertLaserRangeToCellKey(const DpgNode& node) { 
