@@ -80,6 +80,12 @@ namespace dpg_slam {
          * Minimum percent of sectors that have to be active for a node to be active.
          */
         float minimum_percent_active_sectors_;
+
+	/**
+	 * Minimum number of conflicting cells in a node's occupancy grid wrt local submap grid to
+	 * label the measurement points in the node.
+	 */
+	uint32_t num_cells_for_change_detection_;
     };
 
     /**

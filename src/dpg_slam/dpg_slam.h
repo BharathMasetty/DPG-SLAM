@@ -43,14 +43,38 @@ namespace dpg_slam {
      */
     class occupancyGrid {
     public:
+    
+    // Constructor without any nodes 
+    occupancyGrid(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters) :
+	      dpg_parameters_(dpg_parameters), pose_graph_parameters_(pose_graph_parameters) {}	    
+ 
+    // Constructor for combining two occupancy grids.
+    occupancyGrid(const occupancyGrid &grid1, const occupancyGrid &grid2, const DpgParameters &dpg_parameters, 
+	      const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
+    	      pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
+	       include_static_(true) {
+ 	combineOccupancyGrids(grid1, grid2);
+    }	
+    
+    // Constructor for creating an occupancygrid with just one node.
+    occupancyGrid(const DpgNode &current_node, const DpgParameters &dpg_parameters,
+	       const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
+     	       pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
+	       include_static_(true), is_single_node_grid_(true) {
+	Nodes_.push_back(current_node);
+	calculateOccupancyGrid();
+    }    
        
     occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
                const PoseGraphParameters &pose_graph_parameters) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
                pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
-               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true) {
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true),
+	       is_single_node_grid_(false) {
         calculateOccupancyGrid();
     }
-
+    
     /**
      * Alternate constructor that will allow us to visualize the results as an occupancy grid.
      *
@@ -67,8 +91,21 @@ namespace dpg_slam {
                   const bool include_added, const bool include_static) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
                   pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
                   min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(include_inactive),
-                  include_added_(include_added), include_static_(include_static) {
+                  include_added_(include_added), include_static_(include_static), is_single_node_grid_(false) {
         calculateOccupancyGrid();
+    }
+	
+    // Assignment operator for copying an occupancy grid.
+    occupancyGrid & operator = (const occupancyGrid &grid) {
+    
+    	if(this != &grid) {
+		// Probably will not need to copy mode member variables then these three.
+		// But add here if more info need to be copied. 
+		Nodes_ = grid.Nodes_;
+		gridInfo = grid.gridInfo;
+		occupied_cell_info_ = grid.occupied_cell_info_; 	
+	};
+	return *this;
     }
 
     /**
@@ -85,12 +122,6 @@ namespace dpg_slam {
         return gridInfo.at(cell_key);
     }
 
-        bool isCellOccupied(const DpgNode& node){
-        
-        //TODO: Fill in - Bharath
-        return false;
-    }
-
     /**
      * Get the points that contributed to the occupancy of a cell.
      *
@@ -103,7 +134,7 @@ namespace dpg_slam {
             return {};
         }
         return occupied_cell_info_.at(cell_key).points_;
-    }
+    }      
     
     /**
      * To access the gridInfo
@@ -137,6 +168,12 @@ namespace dpg_slam {
          * To fill in the occupancy grid based on input node vectors
          */
         void calculateOccupancyGrid();
+	
+	/**
+	 * For combining two existing occupancy grids
+	 */
+	void combineOccupancyGrids(const occupancyGrid &grid1, const occupancyGrid &grid2);
+
 
         /*
          * For converting measurement point at a node to map frame
@@ -215,6 +252,16 @@ namespace dpg_slam {
          * Set to true if the occupancy grid should include static points.
          */
         bool include_static_;
+
+	/**
+	 * Set true of the occupancy gris is only for one node.
+	 */
+	bool is_single_node_grid_;
+
+	/**
+	 * is grid empty or not
+	 */
+	bool is_grid_empty_;
     };
 
     /**
@@ -564,14 +611,15 @@ namespace dpg_slam {
          * each map is an unordered map from keys in x,y to boolean which says if the grid is occupied or not (int, int)->bool
          * TODO: Need to figure out the data structure for occupancy grids/
          */
-        std::vector<occupancyGrid> computeLocalSubMap();
+	std::pair<std::vector<occupancyGrid>, occupancyGrid> computeLocalSubMap();
 
         /*
          * To find the nodes covering the occupancy map generated by current pose chain
          * @param occupancy grid made for current pose chain.
          * @return vector of nodes covering the current occupancy grid.
          */
-        std::vector<DpgNode> getNodesCoveringCurrGrid(const occupancyGrid &currGrid);
+        std::vector<DpgNode> getNodesCoveringCurrPoseChain(const std::vector<DpgNode> &poseChain,
+							   const std::vector<occupancyGrid> &poseChainGrids);
 
         /*
          * To check if two occupancy grids overlap
@@ -580,23 +628,6 @@ namespace dpg_slam {
          * @return boolean indicating if there is any intersection of feild of views.
          */
         bool checkGridIntersection(const occupancyGrid &Grid1, const occupancyGrid &Grid2);
-
-        /**
-         * This method compares each cell in the currGrid to the corresponding cell is the submap.
-         * @param currGrid         occupancy grid of current pose chain obtained from computeLocalSubmap
-         * @param submapGrid        occupancy grid of local submap obtained from computeLocalSubmap
-         *
-         * @return Vector of dynamic map points with associated labels for measurements in current Grid
-         */
-        std::vector<dpgMapPoint> detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid);
-
-        /**
-         * @param removedPoints     Points from the dynamic map points obtained from detectAndLabelChanges that
-         *                 are labelled as "REMOVED".
-         *
-         * @return vector of inactive nodes.
-         */
-        std::vector<DpgNode> updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints);
 
         /**
          * Get the active and dynamic map points. Each list will be populated with the matching points in the map frame.
@@ -620,10 +651,18 @@ namespace dpg_slam {
          */
         void reduceDPGSize();
 
-            /**
+        /**
          * Main execution Loop for DPG
          */
         void updateDPG();
-    
+    	
+	/**
+	 * To compare how much of the current grid is covered by the local submap grid.
+	 * @param currentGrid
+	 * @param LocalSubMapGrid
+	 *
+	 * @return fraction of currentGrid Covered by local submap grid. 
+	 */
+	double currentGridCoverageByLocalSubMap(const occupancyGrid &currentGrid, const occupancyGrid &localSubMapGrid);
     };
 }  // end dpg_slam

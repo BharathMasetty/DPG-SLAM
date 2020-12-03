@@ -588,7 +588,7 @@ namespace dpg_slam {
         return map;
     }
 
-    std::vector<occupancyGrid> DpgSLAM::computeLocalSubMap(){
+    std::pair<std::vector<occupancyGrid>, occupancyGrid> DpgSLAM::computeLocalSubMap(){
     
         // Grid of current Pose chain
         std::vector<DpgNode> currPoseChain;
@@ -602,32 +602,96 @@ namespace dpg_slam {
             currPoseChain.assign(current_pass_nodes_.end()-maxNumNodes, current_pass_nodes_.end());
         }
 
-        occupancyGrid currGrid(currPoseChain, dpg_parameters_, pose_graph_parameters_);
-        // Grid for FOV nodes
-        std::vector<DpgNode> fovNodes = getNodesCoveringCurrGrid(currGrid);
-        occupancyGrid subMapGrid(fovNodes, dpg_parameters_, pose_graph_parameters_);
+	// create occupancy grids for nodes in current pose chain
+	std::vector<occupancyGrid> currPoseChainGrids;
+	for (uint32_t i=0; i<= currPoseChain.size(); i++) {
+	    DpgNode currNode = currPoseChain[i];
+	    currPoseChainGrids.emplace_back(currNode, dpg_parameters_, pose_graph_parameters_);
+	}
 
-        std::vector<occupancyGrid> grids{currGrid, subMapGrid};
-        return grids;
+        // Grid for FOV nodes
+        std::vector<DpgNode> fovNodes = getNodesCoveringCurrPoseChain(currPoseChain, currPoseChainGrids);
+        occupancyGrid localSubMapGrid(fovNodes, dpg_parameters_, pose_graph_parameters_);
+	
+	return std::make_pair(currPoseChainGrids, localSubMapGrid);
     }
     
-    std::vector<DpgNode> DpgSLAM::getNodesCoveringCurrGrid(const occupancyGrid& currGrid) {
+    std::vector<DpgNode> DpgSLAM::getNodesCoveringCurrPoseChain(const std::vector<DpgNode> &poseChain, 
+		    						const std::vector<occupancyGrid> &poseChainGrids) {
         std::vector<DpgNode> FovNodes;
-        for (uint32_t i=0; i<(dpg_nodes_.size()-current_pass_nodes_.size()); i++) {
-            // TODO: FIll in
-        }
+
+	// Get max laser range
+	float laserRange = dpg_nodes_.back().getMeasurement().getMaxRange();
+
+	for (uint32_t i=0; i < poseChain.size(); i++) {
+		
+		DpgNode currNode = current_pass_nodes_[i];
+		std::pair<Vector2f, float> currentNodeInfo = currNode.getEstimatedPosition();
+		Vector2f currentNodePosition = currentNodeInfo.first;
+		occupancyGrid currentNodeGrid = poseChainGrids[i];
+		occupancyGrid subMapGridForNode(dpg_parameters_, pose_graph_parameters_);
+		bool localGridInitialized = false;
+		double currentNodeFOVCoverage = 0.0;
+		std::vector<DpgNode> FovNodesForCurrNode; 
+		
+		for (uint32_t j=0; j<(dpg_nodes_.size()-current_pass_nodes_.size()); j++) {
+			
+			DpgNode pastNode = dpg_nodes_[j];
+			std::pair<Vector2f, float> pastNodeInfo = pastNode.getEstimatedPosition();
+                	Vector2f pastNodePosition = pastNodeInfo.first;
+			float distanceToCurrentNode = (currentNodePosition-pastNodePosition).norm();
+			double overlapBetweenPastAndCurrentNode;
+			
+			// If A node from previous pass is with laser range of current node in current pass nodes, check if imporves coverage for current node.
+			if (distanceToCurrentNode < laserRange) {
+                                // FOV of past Node close to current node
+				occupancyGrid pastNodeGrid(pastNode, dpg_parameters_, pose_graph_parameters_);
+				if (!localGridInitialized){
+					overlapBetweenPastAndCurrentNode = currentGridCoverageByLocalSubMap(currentNodeGrid, pastNodeGrid);
+					if (overlapBetweenPastAndCurrentNode > 0.0) {
+					 	FovNodesForCurrNode.push_back(pastNode);
+						subMapGridForNode = pastNodeGrid;	
+						currentNodeFOVCoverage = overlapBetweenPastAndCurrentNode;
+					}		
+				}
+				else {
+					occupancyGrid newTempGrid(subMapGridForNode, pastNodeGrid, dpg_parameters_, pose_graph_parameters_);
+					double newTempCoverage = currentGridCoverageByLocalSubMap(currentNodeGrid, newTempGrid);
+					if (newTempCoverage > currentNodeFOVCoverage) {
+						currentNodeFOVCoverage = newTempCoverage;
+						FovNodesForCurrNode.push_back(pastNode);
+						subMapGridForNode = newTempGrid;
+					}
+
+				}
+			}
+			// Add FOV Nodes identified for current node to FovNodes of overall poseChain
+			FovNodes.insert(FovNodes.end(), FovNodesForCurrNode.begin(), FovNodesForCurrNode.end());
+			// stop searching if the fov of current node is fully covered.
+			if (currentNodeFOVCoverage == (double)1.0)
+				break;
+		}
+	}
         return FovNodes;
     }
 
-    std::vector<dpgMapPoint> DpgSLAM::detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid){
-
-        std::vector<dpgMapPoint> dynamicMapPoints;
-        //TODO: Implement Alg. 1 from the paper.
-        //TODO: Bharath
-
-        return dynamicMapPoints;
+    double DpgSLAM::currentGridCoverageByLocalSubMap(const occupancyGrid &currentGrid, const occupancyGrid &localSubMapGrid){
+    	double fractionOverlap;
+	uint32_t cellOverlapCounter = 0;
+	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> subMapGridInfo = localSubMapGrid.getGridInfo();
+	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> currentGridInfo = currentGrid.getGridInfo();
+	uint32_t totalCellKeys = currentGridInfo.size();
+	for(const auto &occ_grid_entry : currentGridInfo) {
+		cellKey CellToBeChecked = occ_grid_entry.first;
+		
+		// check if this key exists in localSubMapGrid
+		if (subMapGridInfo.find(CellToBeChecked) == subMapGridInfo.end()) { 
+			cellOverlapCounter++;
+		}	
+	}
+	fractionOverlap = cellOverlapCounter/totalCellKeys;
+	return fractionOverlap;
     }
-
 
     void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
                                                            const occupancyGrid &local_submap_occ_grid,
@@ -665,25 +729,39 @@ namespace dpg_slam {
             const occupancyGrid &local_submap_occ_grid,
             std::vector<PointIdInfo> &added_points,
             std::vector<PointIdInfo> &removed_points) {
-        for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
-            CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
-            if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
-                std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
-                added_points.insert(added_points.end(), new_added.begin(), new_added.end());
-            } else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
-                std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
-                removed_points.insert(removed_points.end(), new_removed.begin(), new_removed.end());
-            }
-        }
-    }
-
-    std::vector<DpgNode> DpgSLAM::updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints){
-
-        std::vector<DpgNode> inactiveNodes;
-        //TODO: Implement Alg. 2 from the paper.
-
-
-        return inactiveNodes;
+	
+	// Detecting changes
+	std::vector<cellKey> changedKeys;
+	uint32_t numCellsChanged = 0;
+	bool labelNode = false;
+	uint32_t MinCellsForChangeDetection = dpg_parameters_.num_cells_for_change_detection_;
+	
+	// Replacing the idea of counting conflicting bins as explained in part 2 with a simpler way of counting 
+	// number of conflicting cells wrt local submap, since the paper was not clear about how to implement this 
+	// part without scan matching. 
+	for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
+	    CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
+	    if (occ_grid_entry.second != local_submap_occupancy)
+		numCellsChanged++;
+	    // make this a dpg parameter.
+	    if (numCellsChanged >= MinCellsForChangeDetection) {
+	    	labelNode = true;
+		break;
+	    }
+	}
+	// Labeling changes
+	if (labelNode) {
+            for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
+            	CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
+             	if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
+                   std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                   added_points.insert(added_points.end(), new_added.begin(), new_added.end());
+            	} else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
+                   std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                   removed_points.insert(removed_points.end(), new_removed.begin(), new_removed.end());
+            	}
+            }	
+	}
     }
 
     void DpgSLAM::getActiveAndDynamicMapPoints(std::vector<Vector2f> &active_static_points, std::vector<Vector2f> &active_added_points,
@@ -735,6 +813,33 @@ namespace dpg_slam {
 
         cellKey cell_loc = std::make_pair(key_form_x, key_form_y);
         return cell_loc;
+    }
+
+    void occupancyGrid::combineOccupancyGrids(const occupancyGrid &grid1, const occupancyGrid &grid2) {
+   		 
+   	gridInfo = grid1.gridInfo;	
+    	occupied_cell_info_ = grid1.occupied_cell_info_;
+	std::unordered_map<cellKey, OccupiedCellInfo, boost::hash<cellKey>> occupied_cell_info2 = grid2.occupied_cell_info_;
+	
+	// Insert elements of second grid appropriately.
+	for (const auto &occ_grid_entry : grid2.gridInfo) {
+		cellKey key = occ_grid_entry.first;
+		CellStatus value = occ_grid_entry.second;
+		 OccupiedCellInfo cellInfoValue = occupied_cell_info2[key];
+		// Returns false if key is common so we can handle it seperately.
+		bool isNewCell = gridInfo.emplace(key, value).second;
+		occupied_cell_info_.emplace(key, cellInfoValue);
+		// Handle common cells by prioritizing OCCUPIED
+		if (!isNewCell)	{
+			if (value == OCCUPIED){
+				gridInfo[key] = value;
+				occupied_cell_info_[key] = cellInfoValue;
+			}
+		}
+	
+	}
+		
+    
     }
 
     void occupancyGrid::convertLaserRangeToCellKey(const DpgNode& node) { 
