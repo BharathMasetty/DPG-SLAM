@@ -6,6 +6,7 @@
 #include "parameters.h"
 #include "dpg_node.h"
 #include "math_utils.h"
+#include <unordered_set>
 
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/geometry/Pose2.h>
@@ -44,6 +45,31 @@ namespace dpg_slam {
      */
     class occupancyGrid {
     public:
+    
+    // Constructor without any nodes 
+    occupancyGrid(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters) :
+	      dpg_parameters_(dpg_parameters), pose_graph_parameters_(pose_graph_parameters),min_cell_x_(INT_MAX), 
+	      max_cell_x_(INT_MIN), min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), 
+	      include_added_(true), include_static_(true) {}	    
+ 
+    // Constructor for combining two occupancy grids.
+    occupancyGrid(const occupancyGrid &grid1, const occupancyGrid &grid2, const DpgParameters &dpg_parameters, 
+	      const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
+    	      pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
+	       include_static_(true) {
+ 	combineOccupancyGrids(grid1, grid2);
+    }	
+    
+    // Constructor for creating an occupancygrid with just one node.
+    occupancyGrid(const DpgNode &current_node, const DpgParameters &dpg_parameters,
+	       const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
+     	       pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
+	       include_static_(true) {
+	Nodes_.push_back(current_node);
+	calculateOccupancyGrid();
+    }    
        
     occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
                const PoseGraphParameters &pose_graph_parameters) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
@@ -51,7 +77,7 @@ namespace dpg_slam {
                min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true) {
         calculateOccupancyGrid();
     }
-
+    
     /**
      * Alternate constructor that will allow us to visualize the results as an occupancy grid.
      *
@@ -71,6 +97,19 @@ namespace dpg_slam {
                   include_added_(include_added), include_static_(include_static) {
         calculateOccupancyGrid();
     }
+	
+    // Assignment operator for copying an occupancy grid.
+    occupancyGrid & operator = (const occupancyGrid &grid) {
+    
+    	if(this != &grid) {
+		// Probably will not need to copy mode member variables then these three.
+		// But add here if more info need to be copied. 
+		Nodes_ = grid.Nodes_;
+		gridInfo = grid.gridInfo;
+		occupied_cell_info_ = grid.occupied_cell_info_; 	
+	};
+	return *this;
+    }
 
     /**
      * Get the occupancy value for the given cell key.
@@ -86,12 +125,6 @@ namespace dpg_slam {
         return gridInfo.at(cell_key);
     }
 
-        bool isCellOccupied(const DpgNode& node){
-        
-        //TODO: Fill in - Bharath
-        return false;
-    }
-
     /**
      * Get the points that contributed to the occupancy of a cell.
      *
@@ -104,7 +137,7 @@ namespace dpg_slam {
             return {};
         }
         return occupied_cell_info_.at(cell_key).points_;
-    }
+    }      
     
     /**
      * To access the gridInfo
@@ -138,6 +171,12 @@ namespace dpg_slam {
          * To fill in the occupancy grid based on input node vectors
          */
         void calculateOccupancyGrid();
+	
+	/**
+	 * For combining two existing occupancy grids
+	 */
+	void combineOccupancyGrids(const occupancyGrid &grid1, const occupancyGrid &grid2);
+
 
         /*
          * For converting measurement point at a node to map frame
@@ -216,6 +255,11 @@ namespace dpg_slam {
          * Set to true if the occupancy grid should include static points.
          */
         bool include_static_;
+
+	/**
+	 * is grid empty or not
+	 */
+	bool is_grid_empty_;
     };
 
     /**
@@ -260,19 +304,28 @@ namespace dpg_slam {
         // Get latest map.
         std::vector<Eigen::Vector2f> GetMap();
     
-    /**
-     * Get latest active map 
-     */
-    std::vector<dpgMapPoint> GetActiveMap();
-
-    // Get latest dynamic map
-    std::vector<dpgMapPoint> GetDynamicMap();
+    	/**
+     	 * Get latest active map 
+     	 */
+    	std::vector<Eigen::Vector2f> GetActiveStaticPoints() {
+		return active_static_points_;
+	}
+    	std::vector<Eigen::Vector2f> GetActiveAddedPoints() {
+		return active_added_points_;
+	}
+    	// Get latest dynamic map
+    	std::vector<Eigen::Vector2f> GetDynamicAddedPoints() {
+		return dynamic_added_points_;
+	}
+    	std::vector<Eigen::Vector2f> GetDynamicRemovedPoints() {
+		return dynamic_removed_points_;
+	}
 
 
         // Get latest robot pose.
         void GetPose(Eigen::Vector2f* loc, float* angle) const;
-
-        /**
+        
+	/**
          * Add the currently estimated trajectory and the odometry-only estimate to the visualization.
          *
          * Odometry estimate may not start at the same pose.
@@ -384,7 +437,15 @@ namespace dpg_slam {
          * Pose estimates from odometry only. May not be in the same frame as the trajectory estimates.
          */
         std::vector<std::pair<Eigen::Vector2f, float>> odom_only_estimates_;
-
+	
+	/**
+	 * Current Version of active and dynamic map points.
+	 */
+	std::vector<Eigen::Vector2f> active_static_points_;
+        std::vector<Eigen::Vector2f> active_added_points_;
+        std::vector<Eigen::Vector2f> dynamic_removed_points_;
+        std::vector<Eigen::Vector2f> dynamic_added_points_;
+	
         /**
          * Reoptimize the poses.
          *
@@ -573,15 +634,32 @@ namespace dpg_slam {
          * each map is an unordered map from keys in x,y to boolean which says if the grid is occupied or not (int, int)->bool
          * TODO: Need to figure out the data structure for occupancy grids/
          */
-        std::vector<occupancyGrid> computeLocalSubMap();
+	std::pair<std::vector<occupancyGrid>, occupancyGrid> computeLocalSubMap();
 
         /*
          * To find the nodes covering the occupancy map generated by current pose chain
          * @param occupancy grid made for current pose chain.
          * @return vector of nodes covering the current occupancy grid.
          */
-        std::vector<DpgNode> getNodesCoveringCurrGrid(const occupancyGrid &currGrid);
-
+        occupancyGrid getSubMapCoveringCurrPoseChain(const std::vector<DpgNode> &poseChain,
+							   const std::vector<occupancyGrid> &poseChainGrids);
+	/**
+	 * Modifies the cells in the current uncovered cells set by checking if the current verison 
+	 * of the localsubmap covers any of those points.
+	 * @param currentUncoveredCells  set of cells that are uncovered by local submap  yet.
+	 * @param current version of local submap
+	 */	
+ 	void getUpdatedCoverageForCurrentPoseChain(std::unordered_set<cellKey, boost::hash<cellKey>> &currentUncoveredCells, 
+						  const occupancyGrid &localSubMap);
+	/**
+	 * Check if enough bins are changed at current node to commit changes in the labels of observations
+	 * @param added_points at the node
+	 * @param removed_points at the node
+	 *
+	 * @return whether or not to commit changes.
+	 */
+	bool computeBinScoreAndCommitLabelsForNode(const std::vector<PointIdInfo> &addded_points,
+                                                   const std::vector<PointIdInfo> &removed_points);
         /*
          * To check if two occupancy grids overlap
          * @param Grid1
@@ -591,23 +669,23 @@ namespace dpg_slam {
         bool checkGridIntersection(const occupancyGrid &Grid1, const occupancyGrid &Grid2);
 
         /**
-         * This method compares each cell in the currGrid to the corresponding cell is the submap.
-         * @param currGrid         occupancy grid of current pose chain obtained from computeLocalSubmap
-         * @param submapGrid        occupancy grid of local submap obtained from computeLocalSubmap
-         *
-         * @return Vector of dynamic map points with associated labels for measurements in current Grid
+         * Method to delete inactive nodes from dpg graph
+         * NOTE: This is not a top priority.
          */
-        std::vector<dpgMapPoint> detectAndLabelChanges(const occupancyGrid& currGrid, const occupancyGrid& submapGrid);
+        void reduceDPGSize();
 
         /**
-         * @param removedPoints     Points from the dynamic map points obtained from detectAndLabelChanges that
-         *                 are labelled as "REMOVED".
-         *
-         * @return vector of inactive nodes.
+         * Main execution Loop for DPG
          */
-        std::vector<DpgNode> updateActiveAndDynamicMaps(const std::vector<DpgNode> &nodes, const std::vector<dpgMapPoint> &removedPoints);
+        void executeDPG();
 
-        /**
+	/**
+	 * Turn off sectors containing removed points in sectors of nodes from previous pass.
+	 * @param removed points list.
+	 */
+	void updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints);
+
+	/**
          * Get the active and dynamic map points. Each list will be populated with the matching points in the map frame.
          *
          * TODO is there any way to optimize this so we don't have to basically compute a massive point cloud every time?
@@ -623,16 +701,5 @@ namespace dpg_slam {
                                           std::vector<Eigen::Vector2f> &dynamic_removed_points,
                                           std::vector<Eigen::Vector2f> &dynamic_added_points);
 
-        /**
-         * Method to delete inactive nodes from dpg graph
-         * NOTE: This is not a top priority.
-         */
-        void reduceDPGSize();
-
-            /**
-         * Main execution Loop for DPG
-         */
-        void updateDPG();
-    
     };
 }  // end dpg_slam
