@@ -125,9 +125,34 @@ void PublishMap() {
   ClearVisualizationMsg(vis_msg_);
 
   const vector<Vector2f> map = slam_->GetMap();
+  vector<Vector2f> active_static_points;
+  vector<Vector2f> active_added_points;
+  vector<Vector2f> dynamic_added_points;
+  vector<Vector2f> dynamic_removed_points;
+  
+  active_static_points = slam_->GetActiveStaticPoints(); 
+  active_added_points = slam_->GetActiveAddedPoints();
+  dynamic_added_points  = slam_->GetDynamicAddedPoints();
+  dynamic_removed_points = slam_->GetDynamicRemovedPoints();
+
 //  printf("Map: %lu points\n", map.size());
   for (const Vector2f& p : map) {
     visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
+  }
+  
+  const Vector2f activeMapOffset(25.0, 25.0);
+  const Vector2f dynamicMapOffset(-25.0, -25.0);
+  for (const Vector2f& p : active_static_points) {
+    visualization::DrawPoint(p+activeMapOffset, 0x34b4eb, vis_msg_);
+  }
+  for (const Vector2f& p : active_added_points) {
+    visualization::DrawPoint(p+activeMapOffset, 0x34eb4c, vis_msg_);
+  }
+  for (const Vector2f& p : dynamic_added_points) {
+    visualization::DrawPoint(p+dynamicMapOffset, 0xeb34d2, vis_msg_);
+  }
+  for (const Vector2f& p : dynamic_removed_points) {
+    visualization::DrawPoint(p+dynamicMapOffset, 0xeb3443, vis_msg_);
   }
   slam_->publishTrajectory(vis_msg_);
   visualization_publisher_.publish(vis_msg_);
