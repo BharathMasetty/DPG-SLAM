@@ -18,6 +18,7 @@
 #include <boost/functional/hash.hpp>
 
 #include <nav_msgs/OccupancyGrid.h>
+#include <gtsam/nonlinear/ISAM2.h>
 
 typedef std::pair<int, int> cellKey;
 
@@ -313,6 +314,11 @@ namespace dpg_slam {
         gtsam::NonlinearFactorGraph* graph_;
 
         /**
+         * ISAM2 object for incremental smoothing and mapping.
+         */
+        gtsam::ISAM2 *isam_;
+
+        /**
          * DPG specific parameters.
          */
         DpgParameters dpg_parameters_;
@@ -390,8 +396,11 @@ namespace dpg_slam {
 
         /**
          * Optimize the pose graph and update the estimated poses in the nodes.
+         *
+         * @param new_node_init_estimates Initial pose estimated for nodes that have been added to the graph since the
+         * last optimization.
          */
-        void optimizeGraph();
+        void optimizeGraph(gtsam::Values &new_node_init_estimates);
 
         /**
          * Determine if the robot has moved far enough that we should compare the last used laser scan to the current
