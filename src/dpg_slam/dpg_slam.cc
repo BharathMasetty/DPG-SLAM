@@ -135,7 +135,7 @@ namespace dpg_slam {
         }
 
 	ROS_INFO_STREAM("DPG Execution Start");
-	if (pass_number_ > 1)
+	if (pass_number_ >= 1)
 		executeDPG();
     }
 
@@ -640,6 +640,8 @@ namespace dpg_slam {
 	// Get max laser range
 	float proximityThreshold = dpg_parameters_.distance_threshold_for_local_submap_nodes_;
 	float coverageThreshold = dpg_parameters_.current_pose_graph_coverage_threshold_;
+	double currentCoverage = 0;
+	bool isThresholdMet = false;
 
 	for (uint32_t j=0; j<(dpg_nodes_.size()-current_pass_nodes_.size()); j++) { 
 		
@@ -656,8 +658,10 @@ namespace dpg_slam {
                 	std::pair<Vector2f, float> currentNodeInfo = currNode.getEstimatedPosition();
                		Vector2f currentNodePosition = currentNodeInfo.first;
 			float distanceToPastNode = (currentNodePosition - pastNodePosition).norm();
-			if (distanceToPastNode <= proximityThreshold)
+			if (distanceToPastNode <= proximityThreshold) {
+				isInProximity = true;
 				break;
+			}
 		}		
 		
 		if (!isInProximity)
@@ -682,12 +686,17 @@ namespace dpg_slam {
 				currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
 			}
 		}
-
-		double currentCoverage = 1 - (double)currentUncoveredCellsSize/totalUncoveredCells;
-		if (currentCoverage >= coverageThreshold)
+		
+		currentCoverage = 1 - ((double) currentUncoveredCellsSize) / totalUncoveredCells;
+		if (currentCoverage >= coverageThreshold) {
+			isThresholdMet = true;
 			break;
+		}
 	}
-        
+
+	if (!isThresholdMet) { 
+		ROS_ERROR_STREAM("Threshold could not be achieved in submap coverage, current coverange: " << currentCoverage);
+	}
 	return subMapOccupancyGrid;
     } 
 
@@ -781,13 +790,35 @@ namespace dpg_slam {
 	 std::vector<PointIdInfo> changedPoints = added_points;
 	 changedPoints.insert(changedPoints.end(), removed_points.begin(), removed_points.end());
 
+	 DpgNode curr_pose_chain_node = dpg_nodes_[added_points.back().node_num_];
+	 std::pair<Eigen::Vector2f, float> curr_node_info =  curr_pose_chain_node.getEstimatedPosition();
+	 Measurement curr_node_measurement = curr_pose_chain_node.getMeasurement();
+	 float angle_min = curr_node_measurement.getMeasurementRange().first;
+	 float angle_max = curr_node_measurement.getMeasurementRange().second;
+	 float bin_increment = (angle_max - angle_min) / totalBins;
+	 std::pair<Vector2f, float> curr_lidar_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
+			 							 curr_node_info.first, curr_node_info.second);
+
 	 for(const PointIdInfo& point : changedPoints) {
 		DpgNode node = dpg_nodes_[point.node_num_];
-                Measurement MeasurementOfPoint = node.getMeasurement();
-		std::vector<MeasurementPoint> ranges = MeasurementOfPoint.getMeasurements();
-		std::pair<float, float> angleRanges = MeasurementOfPoint.getMeasurementRange();
-                float angle = ranges[point.point_num_in_node_].getAngle();
-		uint32_t binNumber = round(totalBins*(angle-angleRanges.first)/(angleRanges.second-angleRanges.first));
+
+		std::pair<Eigen::Vector2f, float> NodeInfo = node.getEstimatedPosition();
+                Vector2f NodeLocation = NodeInfo.first;
+                float NodeAngle = NodeInfo.second;
+                std::pair<Vector2f, float> lidar_pose_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
+                                                                                        NodeLocation, NodeAngle);
+
+                std::vector<MeasurementPoint> ranges = node.getMeasurement().getMeasurements();
+                Vector2f PointInLaserFrame = ranges[point.point_num_in_node_].getPointInLaserFrame();
+                Vector2f pointInMapFrame = math_utils::transformPoint(PointInLaserFrame, 0,  lidar_pose_in_map.first, lidar_pose_in_map.second).first;
+	 	
+		Vector2f point_loc_rel_lidar = math_utils::inverseTransformPoint(pointInMapFrame, 0, curr_lidar_in_map.first, curr_lidar_in_map.second).first;	
+
+		float angle_rel_curr_node = atan2(point_loc_rel_lidar.y(), point_loc_rel_lidar.x());
+    		if ((angle_rel_curr_node > angle_max) || (angle_rel_curr_node < angle_min)) {
+        		continue;
+    		}
+    		uint16_t binNumber = (angle_rel_curr_node - angle_min) / bin_increment;
 		changedBins.insert(binNumber);
 		current_changed_ratio = changedBins.size()/totalBins;
 		if (current_changed_ratio >= change_threshold) {
@@ -866,9 +897,7 @@ namespace dpg_slam {
 		std::pair<Vector2f, float> lidar_pose_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
                                                                                      	NodeLocation, NodeAngle);
 		std::vector<MeasurementPoint> ranges = node.getMeasurement().getMeasurements();
-		float range = ranges[point.point_num_in_node_].getRange();
-		float angle = ranges[point.point_num_in_node_].getAngle();
-		Vector2f PointInLaserFrame(range*cos(angle), range*sin(angle));
+		Vector2f PointInLaserFrame = ranges[point.point_num_in_node_].getPointInLaserFrame();
 		Vector2f pointInMapFrame = math_utils::transformPoint(PointInLaserFrame, 0,  lidar_pose_in_map.first, lidar_pose_in_map.second).first; 
 		removedVector.push_back(pointInMapFrame);
 				
