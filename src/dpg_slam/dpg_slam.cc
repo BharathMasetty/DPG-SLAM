@@ -89,6 +89,7 @@ namespace dpg_slam {
             addObservationConstraint(prev_node.getNodeNumber(), curr_node.getNodeNumber(), successive_scan_offset);
 
             for (size_t j = 0; j < i - 1; j+= 1) {
+                // TODO consider adding max factors here if reoptimization is too slow, perhaps with a higher max factor count
                 DpgNode loop_closure_node = dpg_nodes_[j];
 
                 float node_dist = (loop_closure_node.getEstimatedPosition().first - curr_node.getEstimatedPosition().first).norm();
@@ -270,32 +271,38 @@ namespace dpg_slam {
 
         if (pose_graph_parameters_.non_successive_scan_constraints_) {
             if (dpg_nodes_.size() > 1) {
-                for (size_t i = 0; i < std::max((size_t) 0, dpg_nodes_.size() - 2); i++) {
-                    DpgNode node = dpg_nodes_[i];
+                int skip_count = 1;
+                size_t start_num = 0;
+                int num_added_factors = 0;
+                if (dpg_nodes_.size() > pose_graph_parameters_.factor_evaluation_skip_number_) {
+                    skip_count = pose_graph_parameters_.factor_evaluation_skip_number_ * (1 + pass_number_);
+                    start_num = dpg_nodes_.size() % skip_count;
+                }
+                for (int run_num = 0; run_num < skip_count; run_num++) {
 
-                    float node_dist = (node.getEstimatedPosition().first - preceding_node.getEstimatedPosition().first).norm();
-                    float node_dist_threshold = (node.getPassNumber() == preceding_node.getPassNumber()) ?
-                                                pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_ : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+                    if (num_added_factors >= pose_graph_parameters_.max_factors_per_node_) {
+                        ROS_INFO_STREAM("Hit max factors");
+                        break;
+                    }
+                    for (size_t i = ((start_num + run_num) % skip_count); i < (dpg_nodes_.size() - 2); i+= skip_count) {
+                        if (num_added_factors >= pose_graph_parameters_.max_factors_per_node_) {
+                            break;
+                        }
+                        DpgNode node = dpg_nodes_[i];
 
-                    if (node_dist <= node_dist_threshold) {
-//                        ROS_INFO_STREAM("Loop closing between node " << i << " at " <<
-//                                                                     node.getEstimatedPosition().first.x() << ", "
-//                                                                     << node.getEstimatedPosition().first.y() << ", "
-//                                                                     << node.getEstimatedPosition().second
-//                                                                     << " and node "
-//                                                                     << preceding_node.getNodeNumber() << " at "
-//                                                                     << preceding_node.getEstimatedPosition().first.x()
-//                                                                     << ", "
-//                                                                     << preceding_node.getEstimatedPosition().first.y()
-//                                                                     << ", "
-//                                                                     << preceding_node.getEstimatedPosition().second);
-                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
-                        if (runIcp(node, preceding_node, non_successive_scan_offset)) {
-//                            ROS_INFO_STREAM("Output transform " << non_successive_scan_offset.first.first.x() << ", "
-//                                                                << non_successive_scan_offset.first.first.y() << ", "
-//                                                                << non_successive_scan_offset.first.second);
-                            addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
-                                                     non_successive_scan_offset);
+                        float node_dist = (node.getEstimatedPosition().first -
+                                           preceding_node.getEstimatedPosition().first).norm();
+                        float node_dist_threshold = (node.getPassNumber() == preceding_node.getPassNumber()) ?
+                                                    pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_
+                                                    : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+
+                        if (node_dist <= node_dist_threshold) {
+                            std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+                            if (runIcp(node, preceding_node, non_successive_scan_offset)) {
+                                addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
+                                                         non_successive_scan_offset);
+                                num_added_factors++;
+                            }
                         }
                     }
                 }
