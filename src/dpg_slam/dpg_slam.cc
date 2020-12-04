@@ -644,6 +644,9 @@ namespace dpg_slam {
 	for (uint32_t j=0; j<(dpg_nodes_.size()-current_pass_nodes_.size()); j++) { 
 		
 		DpgNode pastNode = dpg_nodes_[j];
+		if (!pastNode.isNodeActive())
+			continue;
+
                 std::pair<Vector2f, float> pastNodeInfo = pastNode.getEstimatedPosition();
                 Vector2f pastNodePosition = pastNodeInfo.first;
 		// checking if the past node is close to any of the current nodes.
@@ -654,8 +657,6 @@ namespace dpg_slam {
                		Vector2f currentNodePosition = currentNodeInfo.first;
 			float distanceToPastNode = (currentNodePosition - pastNodePosition).norm();
 			if (distanceToPastNode <= proximityThreshold)
-				isInProximity = true;
-			if (isInProximity)
 				break;
 		}		
 		
@@ -682,7 +683,7 @@ namespace dpg_slam {
 			}
 		}
 
-		double currentCoverage = 1 - currentUncoveredCellsSize/totalUncoveredCells;
+		double currentCoverage = 1 - (double)currentUncoveredCellsSize/totalUncoveredCells;
 		if (currentCoverage >= coverageThreshold)
 			break;
 	}
@@ -774,21 +775,20 @@ namespace dpg_slam {
 
          uint16_t totalBins = dpg_parameters_.num_bins_for_change_detection_;
 	 double change_threshold = dpg_parameters_.delta_change_threshold_;
-	 std::vector<uint16_t> changedBins;
+	 std::unordered_set<uint16_t> changedBins;
 	 bool commitChanges = false;
 	 double current_changed_ratio = 0.0;
 	 std::vector<PointIdInfo> changedPoints = added_points;
 	 changedPoints.insert(changedPoints.end(), removed_points.begin(), removed_points.end());
 
-	 // I know this looks messy but could not think of a better way to get total number of points at a node.
-	 uint64_t node_num = changedPoints.back().node_num_;
-	 uint32_t totalPointsAtNode = dpg_nodes_[node_num].getMeasurement().getMeasurements().size();
-
-	 for (uint32_t i=0; i< changedPoints.size(); i++) {
-	 	uint32_t binNumber = round(totalBins*changedPoints[i].point_num_in_node_/totalPointsAtNode);
-		if (std::find(changedBins.begin(), changedBins.end(), binNumber) == changedBins.end()) {
-			changedBins.push_back(binNumber);
-		}
+	 for(const PointIdInfo& point : changedPoints) {
+		DpgNode node = dpg_nodes_[point.node_num_];
+                Measurement MeasurementOfPoint = node.getMeasurement();
+		std::vector<MeasurementPoint> ranges = MeasurementOfPoint.getMeasurements();
+		std::pair<float, float> angleRanges = MeasurementOfPoint.getMeasurementRange();
+                float angle = ranges[point.point_num_in_node_].getAngle();
+		uint32_t binNumber = round(totalBins*(angle-angleRanges.first)/(angleRanges.second-angleRanges.first));
+		changedBins.insert(binNumber);
 		current_changed_ratio = changedBins.size()/totalBins;
 		if (current_changed_ratio >= change_threshold) {
 			commitChanges = true;
@@ -887,8 +887,8 @@ namespace dpg_slam {
             DpgNode node = Nodes_[i];
             if (include_inactive_ || node.isNodeActive()) {
                 convertLaserRangeToCellKey(node);
-            }
-        }
+	    }
+	}
     }
 
     cellKey occupancyGrid::convertToKeyForm(const Eigen::Vector2f& loc) const {
@@ -917,7 +917,9 @@ namespace dpg_slam {
 		if (!isNewCell)	{
 			if (value == OCCUPIED){
 				gridInfo[key] = value;
-				occupied_cell_info_[key] = cellInfoValue;
+				std::vector<PointIdInfo> points = occupied_cell_info_[key].points_;
+				points.insert(points.end(), cellInfoValue.points_.begin(), cellInfoValue.points_.end());
+				occupied_cell_info_[key].points_ = points;
 			}
 		}
 	

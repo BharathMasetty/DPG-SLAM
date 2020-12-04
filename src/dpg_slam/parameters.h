@@ -49,17 +49,17 @@ namespace dpg_slam {
         /**
          * Number of sectors per node.
          */
-        uint8_t num_sectors_ = 10;
+        uint8_t num_sectors_;
 
         /**
          * Number of nodes that should be in the current pose chain.
          */
         uint8_t current_pose_chain_len_ =  5;
 
-        /**
+	/**
          * Number of bins used for change detection.
          */
-        uint16_t num_bins_for_change_detection_ = 30;
+        uint16_t num_bins_for_change_detection_;
 
         /**
          * Ratio of changed bins to total bins for a node to be considered changed.
@@ -82,15 +82,9 @@ namespace dpg_slam {
         float minimum_percent_active_sectors_ = 0.5;
 
 	/**
-	 * Minimum number of conflicting cells in a node's occupancy grid wrt local submap grid to
-	 * label the measurement points in the node.
-	 */
-	uint32_t num_cells_for_change_detection_ = 5;
-	
-	/**
 	 * Proximity from nodes in current pose chain to search for submap nodes.
 	 */
-	float distance_threshold_for_local_submap_nodes_;
+	float distance_threshold_for_local_submap_nodes_ = 5.0;
     };
 
     /**

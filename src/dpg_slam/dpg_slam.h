@@ -48,7 +48,9 @@ namespace dpg_slam {
     
     // Constructor without any nodes 
     occupancyGrid(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters) :
-	      dpg_parameters_(dpg_parameters), pose_graph_parameters_(pose_graph_parameters) {}	    
+	      dpg_parameters_(dpg_parameters), pose_graph_parameters_(pose_graph_parameters),min_cell_x_(INT_MAX), 
+	      max_cell_x_(INT_MIN), min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), 
+	      include_added_(true), include_static_(true) {}	    
  
     // Constructor for combining two occupancy grids.
     occupancyGrid(const occupancyGrid &grid1, const occupancyGrid &grid2, const DpgParameters &dpg_parameters, 
@@ -64,7 +66,7 @@ namespace dpg_slam {
 	       const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
      	       pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
                min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
-	       include_static_(true), is_single_node_grid_(true) {
+	       include_static_(true) {
 	Nodes_.push_back(current_node);
 	calculateOccupancyGrid();
     }    
@@ -72,8 +74,7 @@ namespace dpg_slam {
     occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
                const PoseGraphParameters &pose_graph_parameters) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
                pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
-               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true),
-	       is_single_node_grid_(false) {
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true) {
         calculateOccupancyGrid();
     }
     
@@ -93,7 +94,7 @@ namespace dpg_slam {
                   const bool include_added, const bool include_static) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
                   pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
                   min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(include_inactive),
-                  include_added_(include_added), include_static_(include_static), is_single_node_grid_(false) {
+                  include_added_(include_added), include_static_(include_static) {
         calculateOccupancyGrid();
     }
 	
@@ -254,11 +255,6 @@ namespace dpg_slam {
          * Set to true if the occupancy grid should include static points.
          */
         bool include_static_;
-
-	/**
-	 * Set true of the occupancy gris is only for one node.
-	 */
-	bool is_single_node_grid_;
 
 	/**
 	 * is grid empty or not
