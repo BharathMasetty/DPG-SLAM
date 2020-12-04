@@ -93,24 +93,18 @@ std::string getBagPath(const std::string &folder_name, const std::string &bag_na
 }
 
 void runOnGdcRosBags() {
-    /**
-     * 2020-11-25-09-32-29.bag                2020-11-25-09-56-35.bag
-2020-11-25-09-35-41.bag                2020-11-25-09-58-44.bag
-2020-11-25-09-42-01.bag                2020-11-25-10-00-28.bag
-2020-11-25-09-43-56.bag                good_gt_2020-11-25-10-03-41.bag
-2020-11-25-09-48-06.bag                gt_hit_things_2020-11-25-10-02-38.bag
-2020-11-25-09-49-55.bag                hit_obs_2020-11-25-09-39-23.bag
-2020-11-25-09-52-37.bag                hit_obs_2020-11-25-09-46-52.bag
-2020-11-25-09-54-42.bag
-
-     */
     // TODO consider adding duration to cut off the end of bags where we just go back and forth forever
     playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-32-29.bag"), 1.2, 13.0, 74);
     playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-35-41.bag"), 0.9, 7.0, 53.0);
     playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-42-01.bag"), 0.7, 0);
     playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-43-56.bag"), 0.6, 0);
-
-    // TODO add other files
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-48-06.bag"), 0.4, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-49-55.bag"), 0.3, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-52-37.bag"), 0.2, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-54-42.bag"), 0.2, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-56-35.bag"), 0.2, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-58-44.bag"), 0.2, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-10-00-28.bag"), 0.2, 0);
 }
 
 void runOnMitRosBags() {

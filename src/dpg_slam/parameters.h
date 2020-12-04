@@ -108,7 +108,9 @@ namespace dpg_slam {
         motion_model_rot_error_from_transl_(kDefaultMotionModelRotErrorFromTransl),
         motion_model_rot_error_from_rot_(kDefaultMotionModelRotErrorFromRot),
         laser_x_in_bl_frame_(kDefaultLaserXInBLFrame), laser_y_in_bl_frame_(kDefaultLaserYInBLFrame),
-        laser_orientation_rel_bl_frame_(kDefaultLaserOrientationRelBLFrame) {
+        laser_orientation_rel_bl_frame_(kDefaultLaserOrientationRelBLFrame),
+        max_factors_per_node_(kDefaultMaxObsFactorsPerNode),
+        factor_evaluation_skip_number_(kDefaultFactorSkipCount) {
             node_handle.param(kIcpMaximumIterationsParamName, icp_maximum_iterations_, kDefaultIcpMaximumIterations);
             node_handle.param(kIcpMaximumTransformationEpsilonParamName, icp_maximum_transformation_epsilon_, kDefaultIcpMaximumTransformationEpsilon);
             node_handle.param(kIcpMaxCorrespondenceDistanceParamName, icp_max_correspondence_distance_, kDefaultIcpMaxCorrespondenceDistance);
@@ -133,6 +135,7 @@ namespace dpg_slam {
             node_handle.param(kLaserYInBLFrameParamName, laser_y_in_bl_frame_, kDefaultLaserYInBLFrame);
             node_handle.param(kLaserOrientationInBLFrameParamName, laser_orientation_rel_bl_frame_, kDefaultLaserOrientationRelBLFrame);
             node_handle.param(kDownsampleIcpPointsRatioParamName, downsample_icp_points_ratio_, kDefaultDownsampleIcpPointsRatio);
+            node_handle.param(kMaxObsFactorsPerNodeParamName, max_factors_per_node_, kDefaultMaxObsFactorsPerNode);
         }
 
         /**
@@ -392,6 +395,22 @@ namespace dpg_slam {
         // ^ 0.2 also works reasonably well
 
         /**
+         * ROS param name for the maximum number of non-successive observation factors that we can have per node.
+         */
+        static constexpr const char *kMaxObsFactorsPerNodeParamName = "max_obs_factors_per_node";
+
+        /**
+         * Default maximum number of non-successive observation factors that we can have per node.
+         */
+        const int kDefaultMaxObsFactorsPerNode = 15;
+
+        /**
+         * Default value for the number of factors that we should skip at a time when determining which factors to
+         * consider adding.
+         */
+        const int kDefaultFactorSkipCount = 10;
+
+        /**
          * Default value for the divisor for the fraction of points we should use in ICP.
          */
         const int kDefaultDownsampleIcpPointsRatio = 5;
@@ -549,6 +568,19 @@ namespace dpg_slam {
          * Orientation of the lidar relative to the base link frame.
          */
         float laser_orientation_rel_bl_frame_;
+
+        /**
+         * Maximum number of non-successive observation factors that we can have per node.
+         */
+        int max_factors_per_node_;
+
+        /**
+         * Number of factors that we should skip at a time when determining which factors to consider adding.
+         *
+         * Will cycle back through to start at the next unexamined factor if we don't have the maximum number of factors
+         * by this number.
+         */
+        int factor_evaluation_skip_number_;
 
     };
 }
