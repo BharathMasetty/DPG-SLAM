@@ -100,6 +100,7 @@ bool run_ = true;
 std::unique_ptr<dpg_slam::DpgSLAM> slam_;
 ros::Publisher visualization_publisher_;
 ros::Publisher localization_publisher_;
+ros::Publisher reoptimization_complete_pub_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
 Vector2f prev_odom_;
@@ -184,6 +185,8 @@ void CobotOdometryCallback(const cobot_msgs::CobotOdometryMsg &cobot_msg) {
 void NewPassCallback(const std_msgs::Empty &msg) {
     ROS_INFO_STREAM("New pass!");
     slam_->incrementPassNumber();
+    PublishMap();
+    reoptimization_complete_pub_.publish(std_msgs::Empty());
 }
 
 int gtsam_test(int argc, char** argv) {
@@ -276,6 +279,8 @@ int main(int argc, char** argv) {
       n.advertise<VisualizationMsg>("visualization", 1);
   localization_publisher_ =
       n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
+  reoptimization_complete_pub_ =
+      n.advertise<std_msgs::Empty>("reoptimization_complete", 1);
 
   ros::Subscriber laser_sub = n.subscribe(
       FLAGS_laser_topic.c_str(),

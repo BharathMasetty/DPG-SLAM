@@ -75,6 +75,11 @@ namespace dpg_slam {
          * Occupancy grid resolution when computing the submap coverage.
          */
         double occ_grid_resolution_;
+
+        /**
+         * Minimum percent of sectors that have to be active for a node to be active.
+         */
+        float minimum_percent_active_sectors_;
     };
 
     /**
@@ -95,7 +100,6 @@ namespace dpg_slam {
         PoseGraphParameters(ros::NodeHandle &node_handle) : icp_maximum_iterations_(kDefaultIcpMaximumIterations),
         icp_maximum_transformation_epsilon_(kDefaultIcpMaximumTransformationEpsilon),
         icp_max_correspondence_distance_(kDefaultIcpMaxCorrespondenceDistance),
-        maximum_node_dist_scan_comparison_(kDefaultMaximumNodeDistScanComparison),
         gtsam_max_iterations_(kDefaultGtsamMaxIterations), min_dist_between_nodes_(kDefaultMinDistBetweenNodes),
         min_angle_between_nodes_(kDefaultMinAngleBetweenNodes), new_pass_x_std_dev_(kDefaultNewPassXStdDev),
         new_pass_y_std_dev_(kDefaultNewPassYStdDev), new_pass_theta_std_dev_(kDefaultNewPassThetaStdDev),
@@ -110,7 +114,10 @@ namespace dpg_slam {
             node_handle.param(kIcpMaxCorrespondenceDistanceParamName, icp_max_correspondence_distance_, kDefaultIcpMaxCorrespondenceDistance);
             node_handle.param(kRansacIterationsParamName, ransac_iterations_, kDefaultRansacIterations);
             node_handle.param(kIcpUseReciprocalCorrespondences, icp_use_reciprocal_correspondences_, kDefaultIcpUseReciprocalCorrespondences);
-            node_handle.param(kMaximumNodeDistScanComparisonParamName, maximum_node_dist_scan_comparison_, kDefaultMaximumNodeDistScanComparison);
+            node_handle.param(kMaximumNodeDistWithinPassScanComparisonParamName, maximum_node_dist_within_pass_scan_comparison_,
+                              kDefaultMaximumNodeDistWithinPassScanComparison);
+            node_handle.param(kMaximumNodeDistAcrossPassesScanComparisonParamName, maximum_node_dist_across_passes_scan_comparison_,
+                              kDefaultMaximumNodeDistAcrossPassesScanComparison);
             node_handle.param(kMinDistBetweenNodesParamName, min_dist_between_nodes_, kDefaultMinDistBetweenNodes);
             node_handle.param(kMinAngleBetweenNodesParamName, min_angle_between_nodes_, kDefaultMinAngleBetweenNodes);
             node_handle.param(kNonSuccessiveScanConstraintsParamName, non_successive_scan_constraints_, kDefaultNonsuccessiveScanConstraints);
@@ -194,14 +201,28 @@ namespace dpg_slam {
         static constexpr const char *kIcpUseReciprocalCorrespondences = "icp_use_reciprocal_correspondences";
 
         /**
-         * Default maximum amount that two nodes can be separated by to try to align their scans.
+         * Default maximum amount that two nodes can be separated by to try to align their scans if they are in the same
+         * pass.
          */
-        const float kDefaultMaximumNodeDistScanComparison = 3.0; // TODO tune
+        const float kDefaultMaximumNodeDistWithinPassScanComparison = 5.0; // TODO tune
 
         /**
-         * ROS Param Name for the maximum amount that two nodes can be separated by to try to align their scans.
+         * ROS Param Name for the maximum amount that two nodes can be separated by to try to align their scans if they are in the same
+         * pass.
          */
-        static constexpr const char *kMaximumNodeDistScanComparisonParamName = "maximum_node_dist_scan_comparison_param_name";
+        static constexpr const char *kMaximumNodeDistWithinPassScanComparisonParamName = "maximum_node_dist_within_pass_scan_comparison";
+
+        /**
+         * Default maximum amount that two nodes can be separated by to try to align their scans if they
+         * are in different passes.
+         */
+        const float kDefaultMaximumNodeDistAcrossPassesScanComparison = 2.0; // TODO tune
+
+        /**
+         * ROS Param Name for the maximum amount that two nodes can be separated by to try to align their scans if they
+         * are in different passes.
+         */
+        static constexpr const char *kMaximumNodeDistAcrossPassesScanComparisonParamName = "maximum_node_dist_across_passes_scan_comparison";
 
         /**
          * Default maximum number of iterations for one run of GTSAM estimation.
@@ -451,9 +472,14 @@ namespace dpg_slam {
         // euclidean fitness epsilon?
 
         /**
-         * Maximum amount that two nodes can be separated by to try to align their scans.
+         * Maximum amount that two nodes can be separated by to try to align their scans if they are within the same pass.
          */
-        float maximum_node_dist_scan_comparison_;
+        float maximum_node_dist_within_pass_scan_comparison_;
+
+        /**
+         * Maximum amount that two nodes can be separated by to try to align their scans if they are in different passes.
+         */
+        float maximum_node_dist_across_passes_scan_comparison_;
 
         /**
          * Maximum number of iterations for one run of GTSAM estimation.
