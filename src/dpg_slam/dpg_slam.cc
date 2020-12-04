@@ -5,6 +5,7 @@
 #include <visualization/visualization.h>
 #include <ros/ros.h>
 #include <unordered_set>
+#include <gtsam/nonlinear/ISAM2.h>
 
 using namespace gtsam;
 using namespace Eigen;
@@ -18,6 +19,7 @@ namespace dpg_slam {
                      pass_number_(kInitialPassNumber), odom_initialized_(false), first_scan_for_pass_(true),
                      cumulative_dist_since_laser_laser_align_(0.0) {
         graph_ = new NonlinearFactorGraph();
+        isam_ = new ISAM2(); // TODO need params?
     }
 
     void DpgSLAM::incrementPassNumber() {
@@ -31,6 +33,9 @@ namespace dpg_slam {
     }
 
     void DpgSLAM::reoptimize() {
+        delete graph_;
+        delete isam_;
+        isam_ = new ISAM2(); // TODO need params?
         graph_ = new NonlinearFactorGraph();
         uint8_t pass_num = -1;
         for (size_t i = 0; i < dpg_nodes_.size(); i++) {
@@ -101,7 +106,17 @@ namespace dpg_slam {
             }
 
         }
-        optimizeGraph();
+        // Get initial estimates for each node based on their current estimated position
+        // With the exception of the new node, this will be the estimate from the last GTSAM update
+        gtsam::Values init_estimates;
+        for (size_t i = 0; i < dpg_nodes_.size(); i++) {
+            // TODO should we do this each time or just add the estimate for a new node?
+            // The former will converge faster, but the latter has less duplicate computation
+            DpgNode node = dpg_nodes_[i];
+            std::pair<Vector2f, float> est_pose = node.getEstimatedPosition();
+            init_estimates.insert(node.getNodeNumber(), Pose2(est_pose.first.x(), est_pose.first.y(), est_pose.second));
+        }
+        optimizeGraph(init_estimates);
     }
 
     void DpgSLAM::ObserveLaser(const std::vector<float>& ranges,
@@ -176,6 +191,12 @@ namespace dpg_slam {
                 //  run DPG on them separately?
                 dpg_nodes_.push_back(new_node);
                 current_pass_nodes_.push_back(new_node);
+
+                gtsam::Values init_estimate_for_new_node;
+                init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPosition().first.x(),
+                                                                                  new_node.getEstimatedPosition().first.y(),
+                                                                                  new_node.getEstimatedPosition().second));
+                optimizeGraph(init_estimate_for_new_node);
                 return false;
             } else {
 
@@ -283,29 +304,19 @@ namespace dpg_slam {
         dpg_nodes_.push_back(new_node);
         current_pass_nodes_.push_back(new_node);
 
-        optimizeGraph();
+        gtsam::Values init_estimate_for_new_node;
+        init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPosition().first.x(),
+                                                                          new_node.getEstimatedPosition().first.y(),
+                                                                          new_node.getEstimatedPosition().second));
+        optimizeGraph(init_estimate_for_new_node);
     }
 
-    void DpgSLAM::optimizeGraph() {
-
-        // Get initial estimates for each node based on their current estimated position
-        // With the exception of the new node, this will be the estimate from the last GTSAM update
-        gtsam::Values init_estimates;
-        for (size_t i = 0; i < dpg_nodes_.size(); i++) {
-            // TODO should we do this each time or just add the estimate for a new node?
-            // The former will converge faster, but the latter has less duplicate computation
-            DpgNode node = dpg_nodes_[i];
-            std::pair<Vector2f, float> est_pose = node.getEstimatedPosition();
-            init_estimates.insert(node.getNodeNumber(), Pose2(est_pose.first.x(), est_pose.first.y(), est_pose.second));
-        }
+    void DpgSLAM::optimizeGraph(gtsam::Values &new_node_init_estimates) {
 
         // Optimize the trajectory and update the nodes' position estimates
-        LevenbergMarquardtParams optimization_params;
-        optimization_params.maxIterations = pose_graph_parameters_.gtsam_max_iterations_;
         // TODO do we need other params here?
-        Values result = LevenbergMarquardtOptimizer(*graph_, init_estimates, optimization_params).optimize();
-//        init_estimates.print("Initial estimates");
-//        result.print("Results");
+        isam_->update(*graph_, new_node_init_estimates);
+        Values result = isam_->calculateEstimate();
 
         for (DpgNode &dpg_node : dpg_nodes_) {
 
