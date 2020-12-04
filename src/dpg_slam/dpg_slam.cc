@@ -6,11 +6,23 @@
 #include <ros/ros.h>
 #include <unordered_set>
 #include <gtsam/nonlinear/ISAM2.h>
+#include <fstream>
 
 using namespace gtsam;
 using namespace Eigen;
 
 namespace dpg_slam {
+
+    void writeCsv(const std::string &file_name, const std::vector<std::vector<std::string>> &data_to_write) {
+        std::ofstream output_file(file_name.c_str());
+        for (const std::vector<std::string> &line_of_data : data_to_write) {
+            for (const std::string &entry_in_line : line_of_data) {
+                output_file << entry_in_line << ",";
+            }
+            output_file << "\n";
+        }
+        output_file.close();
+    }
 
     DpgSLAM::DpgSLAM(const DpgParameters &dpg_parameters,
                      const PoseGraphParameters &pose_graph_parameters,
@@ -22,14 +34,45 @@ namespace dpg_slam {
         isam_ = new ISAM2(); // TODO need params?
     }
 
-    void DpgSLAM::incrementPassNumber() {
+    void DpgSLAM::incrementPassNumber(const bool &should_write_results) {
         pass_number_++;
         odom_initialized_ = false;
         first_scan_for_pass_ = true;
         current_pass_nodes_.clear();
 
         reoptimize();
+
+        if (should_write_results) {
+            // Construct the various occupancy grids
+            // Want active, active-static, dynamic (all added + removed), all
+            {
+                occupancyGrid all_points_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true,
+                                                  true);
+                std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1);
+                all_points_occ_grid.writeToFile(all_points_file_name);
+            }
+            {
+                occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, true, true);
+                std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1);
+            }
+            {
+                occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, false);
+                std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1);
+            }
+            {
+                occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, false,
+                                                     true);
+                std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1);
+            }
+        }
         ROS_INFO_STREAM("Done reoptimizing");
+        ROS_INFO_STREAM("Total nodes " << dpg_nodes_.size());
+        int active_nodes = 0;
+        for (const DpgNode &node : dpg_nodes_) {
+            if (node.isActive()) {
+                active_nodes++;
+            }
+        }
     }
 
     void DpgSLAM::reoptimize() {
@@ -735,6 +778,27 @@ namespace dpg_slam {
 
     void DpgSLAM::updateDPG(){
         // TODO: Fill-in
+    }
+
+    void occupancyGrid::writeToFile(const std::string &file_name) {
+        std::vector<std::vector<std::string>> strings_to_write;
+        strings_to_write.emplace_back((std::vector<std::string>){
+            (std::string) "occ_grid_resolution", std::to_string(dpg_parameters_.occ_grid_resolution_)});
+        strings_to_write.emplace_back((std::vector<std::string>){
+                std::string("x"), std::to_string(dpg_parameters_.occ_grid_resolution_)});
+
+        for (const auto &cell_info : gridInfo) {
+            std::string occ_val;
+            if (cell_info.second == OCCUPIED) {
+                occ_val = std::to_string(1);
+            } else if (cell_info.second == FREE) {
+                occ_val = std::to_string(0);
+            }
+            // For now, not writing unknown
+            strings_to_write.emplace_back((std::vector<std::string>) {
+                std::to_string(cell_info.first.first), std::to_string(cell_info.first.second), occ_val});
+        }
+        writeCsv(file_name, strings_to_write);
     }
 
     void occupancyGrid::calculateOccupancyGrid(){

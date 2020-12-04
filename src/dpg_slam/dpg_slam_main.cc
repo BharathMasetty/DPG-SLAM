@@ -93,6 +93,7 @@ DEFINE_string(cobot_odom_topic, "/Cobot/Odometry", "Name of ROS topic for cobot 
 DEFINE_string(new_pass_topic, "/new_pass", "Name of ROS topic that when we've received a message indicates we're on a "
                                            "new pass");
 DEFINE_bool(gtsam_test, false, "Run GTSam test");
+DEFINE_bool(write_results, false, "Write grid results to file");
 
 DECLARE_int32(v);
 
@@ -184,7 +185,7 @@ void CobotOdometryCallback(const cobot_msgs::CobotOdometryMsg &cobot_msg) {
 
 void NewPassCallback(const std_msgs::Empty &msg) {
     ROS_INFO_STREAM("New pass!");
-    slam_->incrementPassNumber();
+    slam_->incrementPassNumber(FLAGS_write_results);
     PublishMap();
     reoptimization_complete_pub_.publish(std_msgs::Empty());
 }
