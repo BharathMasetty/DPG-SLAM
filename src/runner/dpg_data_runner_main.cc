@@ -17,7 +17,7 @@ const float kGdcLaserXInBLFrame = 0.2;
 const float kGdcLaserYInBLFrame = 0.0;
 const float kGdcLaserOrientationRelBLFrame = 0.0;
 
-const float kMitLaserXInBLFrame = 0.2; // TODO set this
+const float kMitLaserXInBLFrame = 0.17; // TODO set this
 const float kMitLaserYInBLFrame = 0.0; // TODO set this
 const float kMitLaserOrientationRelBLFrame = 0.0; // TODO set this
 
@@ -42,8 +42,9 @@ void playRosbag(const std::string &rosbag_name, const float &playback_rate, cons
     if (duration > 0) {
         duration_string = " -u " + std::to_string(duration) + " ";
     }
-    std::string run_cmd = "rosbag play " + rosbag_name + duration_string + " /Cobot/Laser:=/scan -r " + std::to_string(playback_rate) + " -s "
-            + std::to_string(start_time) + " --topics /odom /scan /Cobot/Odometry /Cobot/Laser";
+    std::string run_cmd = "rosbag play " + rosbag_name + duration_string + " /Cobot/Laser:=/scan -r " +
+            std::to_string(playback_rate) + " -s " + std::to_string(start_time) +
+            " --topics /odom /scan /Cobot/Odometry /Cobot/Laser";
     ROS_INFO_STREAM("System result: " << system(run_cmd.c_str()));
     new_pass_pub_.publish(std_msgs::Empty());
     std::unique_lock<std::mutex> lk(reoptimization_done_mutex_);
@@ -69,6 +70,15 @@ void setGdcRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserOrientationInBLFrameParamName,
                          kGdcLaserOrientationRelBLFrame);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMinAngleBetweenNodesParamName, M_PI / 6);
+
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kNewPassThetaStdDevParamName, 0.15);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 5);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 15);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistAcrossPassesScanComparisonParamName, 2.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistWithinPassScanComparisonParamName, 5.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 0.4);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromTranslParamName, 0.4);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.4);
 }
 
 /**
@@ -85,7 +95,30 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserYInBLFrameParamName, kMitLaserYInBLFrame);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kLaserOrientationInBLFrameParamName,
                          kMitLaserOrientationRelBLFrame);
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMinAngleBetweenNodesParamName, 0.3);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMinAngleBetweenNodesParamName, M_PI / 6);//0.3);
+
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kNewPassThetaStdDevParamName, 0.4);
+
+    // 2 also works (maybe slightly better, but is slower)
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 5);
+
+    // 30 also works
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 20);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistAcrossPassesScanComparisonParamName, 1.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistWithinPassScanComparisonParamName, 3.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 1.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 1.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromTranslParamName, 0.8);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.2);
+
+//
+//    downsample_icp_points: 2
+//    max_obs_factors_per_node: 200
+//    maximum_node_dist_across_passes_scan_comparison: 1.0
+//    maximum_node_dist_within_pass_scan_comparison: 3
+//    motion_rot_from_rot: 50
+//    motion_rot_from_transl: 0.8
+//    motion_transl_from_rot: 0.2
 }
 
 std::string getBagPath(const std::string &folder_name, const std::string &bag_name) {
@@ -108,16 +141,16 @@ void runOnGdcRosBags() {
 }
 
 void runOnMitRosBags() {
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 1.2, 25);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 2, 25);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.8, 40, 300);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___2_29_b21.bag"), 0.5,4, 270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.5,4, 300);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.7,4, 270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.6,15, 285);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.5,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.5,2,310);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.5,2,240);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.5,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.5,2,290);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.50,2,280);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.4,2,310);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.3,2,240);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.2,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.2,2,290);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.2,2,280);
     // TODO
 }
 
