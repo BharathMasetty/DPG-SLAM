@@ -48,21 +48,21 @@ namespace dpg_slam {
             {
                 occupancyGrid all_points_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true,
                                                   true);
-                std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1);
+                std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
                 all_points_occ_grid.writeToFile(all_points_file_name);
             }
             {
                 occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, true, true);
-                std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1);
+                std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
             }
             {
                 occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, false);
-                std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1);
+                std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
             }
             {
                 occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, false,
                                                      true);
-                std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1);
+                std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
             }
         }
         ROS_INFO_STREAM("Done reoptimizing");
@@ -131,20 +131,24 @@ namespace dpg_slam {
             }
             addObservationConstraint(prev_node.getNodeNumber(), curr_node.getNodeNumber(), successive_scan_offset);
 
-            for (size_t j = 0; j < i - 1; j+= 1) {
-                // TODO consider adding max factors here if reoptimization is too slow, perhaps with a higher max factor count
-                DpgNode loop_closure_node = dpg_nodes_[j];
+            if (pose_graph_parameters_.non_successive_scan_constraints_) {
+                for (size_t j = 0; j < i - 1; j+= 1) {
+                    // TODO consider adding max factors here if reoptimization is too slow, perhaps with a higher max factor count
+                    DpgNode loop_closure_node = dpg_nodes_[j];
 
-                float node_dist = (loop_closure_node.getEstimatedPosition().first - curr_node.getEstimatedPosition().first).norm();
-                float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
-                        pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_ : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+                    float node_dist = (loop_closure_node.getEstimatedPosition().first -
+                                       curr_node.getEstimatedPosition().first).norm();
+                    float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
+                                                pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_
+                                                                                                                 : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
 
-                if (node_dist <= node_dist_threshold) {
+                    if (node_dist <= node_dist_threshold) {
 
-                    std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
-                    if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
-                        addObservationConstraint(loop_closure_node.getNodeNumber(), curr_node.getNodeNumber(),
-                                                 non_successive_scan_offset);
+                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+                        if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
+                            addObservationConstraint(loop_closure_node.getNodeNumber(), curr_node.getNodeNumber(),
+                                                     non_successive_scan_offset);
+                        }
                     }
                 }
             }
@@ -965,7 +969,7 @@ namespace dpg_slam {
         strings_to_write.emplace_back((std::vector<std::string>){
             (std::string) "occ_grid_resolution", std::to_string(dpg_parameters_.occ_grid_resolution_)});
         strings_to_write.emplace_back((std::vector<std::string>){
-                std::string("x"), std::to_string(dpg_parameters_.occ_grid_resolution_)});
+                std::string("x"), std::string("y"), std::string("occupancy")});
 
         for (const auto &cell_info : gridInfo) {
             std::string occ_val;
