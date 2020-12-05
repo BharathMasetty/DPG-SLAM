@@ -151,14 +151,30 @@ void runOnGdcRosBags() {
 void runOnMitRosBags() {
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 2, 25);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.8, 40, 300);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.7,4, 270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.6,15, 285);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.5,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.4,2,310);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.5,4, 270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.45,15, 285);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.4,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 035,2,310);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.3,2,240);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.2,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.2,2,290);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.2,2,280);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.1,2,290);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.05,2,280);
+
+
+
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__1_25_2009___21_49_b21.bag"), 0.05, 0, 265);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__3_18_2009___23_31_b21.bag"), 0.05, 0, 283);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__3_18_2009___23_53_b21.bag"), 0.05, 0, 285);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__1_19_2009___2_42_b21.bag"), 0.05, 0, 295);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__3_19_2009___0_18_b21.bag"), 0.05, 0, 283);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__1_19_2009___3_5_b21.bag"), 0.05, 0, 273);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.05, 0, 318);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__3_19_2009___0_54_b21.bag"), 0.05, 0, 276);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__1_25_2009___20_20_b21.bag"), 0.05, 0, 263);
+playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__1_25_2009___20_53_b21.bag"), 0.05, 0, 266);
+
+
+
     // TODO
 }
 void SignalHandler(int) {
