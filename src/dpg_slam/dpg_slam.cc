@@ -1,7 +1,6 @@
 
 #include "dpg_slam.h"
 #include <pcl/registration/icp.h>
-#include "icp_cov/cov_func_point_to_point.h"
 #include <visualization/visualization.h>
 #include <ros/ros.h>
 #include <unordered_set>
@@ -501,9 +500,10 @@ namespace dpg_slam {
         }
 
         // Estimate the covariance
-        Eigen::MatrixXd est_cov;
-        calculate_ICP_COV(node_2_cloud, node_1_cloud, est_transform, est_cov, pose_graph_parameters_.laser_x_variance_,
-                          pose_graph_parameters_.laser_y_variance_, pose_graph_parameters_.laser_theta_variance_);
+        Eigen::Matrix3d est_cov;
+        est_cov << pose_graph_parameters_.laser_x_variance_, 0, 0,
+                0, pose_graph_parameters_.laser_y_variance_, 0,
+                0, 0, pose_graph_parameters_.laser_theta_variance_;
 
         // Extract the angle and translation from the transform estimate
         Eigen::Matrix2f rotation_mat = est_transform.block<2, 2>(0, 0);
