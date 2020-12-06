@@ -104,6 +104,7 @@ ros::Publisher localization_publisher_;
 ros::Publisher reoptimization_complete_pub_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
+nav_msgs::OccupancyGrid occ_grid_;
 Vector2f prev_odom_;
 float prev_angle_;
 
@@ -112,7 +113,7 @@ void InitializeMsgs() {
   header.frame_id = "map";
   header.seq = 0;
 
-  vis_msg_ = visualization::NewVisualizationMessage("map", "slam");
+ vis_msg_ = visualization::NewVisualizationMessage("map", "slam");
 }
 
 void PublishMap() {
@@ -130,11 +131,15 @@ void PublishMap() {
   vector<Vector2f> active_added_points;
   vector<Vector2f> dynamic_added_points;
   vector<Vector2f> dynamic_removed_points;
+  vector<Vector2f> cells_to_plot;
+  vector<Vector2f> submap_cells_to_plot;
   
   active_static_points = slam_->GetActiveStaticPoints(); 
   active_added_points = slam_->GetActiveAddedPoints();
   dynamic_added_points  = slam_->GetDynamicAddedPoints();
   dynamic_removed_points = slam_->GetDynamicRemovedPoints();
+  cells_to_plot = slam_->getCellsToPlot();
+  submap_cells_to_plot = slam_->getSubMapCellsToPlot();
 
 //  printf("Map: %lu points\n", map.size());
   for (const Vector2f& p : map) {
@@ -155,6 +160,14 @@ void PublishMap() {
   for (const Vector2f& p : dynamic_removed_points) {
     visualization::DrawPoint(p+dynamicMapOffset, 0xeb3443, vis_msg_);
   }
+  for (const Vector2f& p : cells_to_plot) {
+    visualization::DrawPoint(p, 0x34b4eb, vis_msg_);
+  }
+
+  for (const Vector2f& p : submap_cells_to_plot) {
+    visualization::DrawPoint(p, 0xeb1056, vis_msg_);
+  }
+
   slam_->publishTrajectory(vis_msg_);
   visualization_publisher_.publish(vis_msg_);
 }
@@ -168,6 +181,9 @@ void PublishPose() {
   localization_msg.pose.y = robot_loc.y();
   localization_msg.pose.theta = robot_angle;
   localization_publisher_.publish(localization_msg);
+
+  
+
 }
 
 void LaserCallback(const sensor_msgs::LaserScan& msg) {
@@ -298,7 +314,7 @@ int main(int argc, char** argv) {
   dpg_slam::DpgParameters dpg_params;
   dpg_slam::VisualizationParams visualization_params;
 
-  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params, visualization_params);
+  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params, visualization_params, &n, vis_msg_);
   InitializeMsgs();
 
   visualization_publisher_ =
@@ -307,7 +323,7 @@ int main(int argc, char** argv) {
       n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
   reoptimization_complete_pub_ =
       n.advertise<std_msgs::Empty>("reoptimization_complete", 1);
-
+  
   ros::Subscriber laser_sub = n.subscribe(
       FLAGS_laser_topic.c_str(),
       1,

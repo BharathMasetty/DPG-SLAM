@@ -39,8 +39,8 @@ namespace dpg_slam {
          * @param max_range     Maximum range reading (we should ignore any that are not less than this).
          */
         MeasurementPoint(const float &angle, const float &range, const uint8_t &sector_num, const float &max_range) : angle_(angle),
-        range_(range), label_(NOT_YET_LABELED), sector_num_(sector_num) {
-            if (range_ >= max_range) {
+        range_(range), label_(STATIC), sector_num_(sector_num) {
+	    if (range_ >= 10.0) {
                 label_ = MAX_RANGE;
             }
         }

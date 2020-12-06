@@ -150,7 +150,7 @@ namespace dpg_slam {
 
     /**
      * Convert this to an ocupancy grid message so we can publish it.
-     *
+     *gridInfo
      * @param occ_grid_msg[out]     Occupancy grid message to populate.
      * @param distinguish_free[in]  True if we should add free cells as well as occupied cells (will be true for
      * visualizing submap, will be false when we want to get the occ grid for the different results layers).
@@ -172,6 +172,7 @@ namespace dpg_slam {
      * Mapping from keys based on cell location in map to the boolean representing of there is a map point in the grid or not.
      */
     std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridInfo;
+
 
     private:
     
@@ -294,7 +295,7 @@ namespace dpg_slam {
          * @param visualization_parameters  Visualization parameters.
          */
         DpgSLAM(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters,
-                const VisualizationParams &visualization_parameters);
+                const VisualizationParams &visualization_parameters, ros::NodeHandle *node_handle, amrl_msgs::VisualizationMsg viz);
 
         // Observe a new laser scan.
         void ObserveLaser(const std::vector<float>& ranges,
@@ -334,6 +335,15 @@ namespace dpg_slam {
 		return dynamic_removed_points_;
 	}
 
+	std::vector<Eigen::Vector2f> getCellsToPlot() {
+		return cells_to_plot_;
+	}
+
+	std::vector<Eigen::Vector2f> getSubMapCellsToPlot() {
+                return submap_cells_to_plot_;
+        }
+
+
 
         // Get latest robot pose.
         void GetPose(Eigen::Vector2f* loc, float* angle) const;
@@ -347,7 +357,9 @@ namespace dpg_slam {
          */
         void publishTrajectory(amrl_msgs::VisualizationMsg &visualization_msg);
 
+
     private:
+
 
         /**
          * Number of the first pass. Subsequent passes will be incremented by 1.
@@ -373,6 +385,8 @@ namespace dpg_slam {
          * List of nodes forming the trajectory.
          */
         std::vector<DpgNode> dpg_nodes_;
+
+	uint32_t num_curr_pass_nodes_;
 
         /**
          * GTSAM factor graph.
@@ -458,7 +472,12 @@ namespace dpg_slam {
         std::vector<Eigen::Vector2f> active_added_points_;
         std::vector<Eigen::Vector2f> dynamic_removed_points_;
         std::vector<Eigen::Vector2f> dynamic_added_points_;
-	
+	std::vector<Eigen::Vector2f> cells_to_plot_;	
+	std::vector<Eigen::Vector2f> submap_cells_to_plot_;	
+	ros::Publisher grid_publisher;
+	amrl_msgs::VisualizationMsg vis;
+	ros::NodeHandle *node_handle_;
+
         /**
          * Reoptimize the poses.
          *

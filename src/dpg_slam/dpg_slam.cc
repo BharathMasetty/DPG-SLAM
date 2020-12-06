@@ -8,6 +8,8 @@
 #include <gtsam/nonlinear/ISAM2.h>
 #include <fstream>
 
+#include<iterator>
+#include<algorithm>
 using namespace gtsam;
 using namespace Eigen;
 
@@ -26,16 +28,19 @@ namespace dpg_slam {
 
     DpgSLAM::DpgSLAM(const DpgParameters &dpg_parameters,
                      const PoseGraphParameters &pose_graph_parameters,
-                     const VisualizationParams &visualization_parameters) : dpg_parameters_(dpg_parameters),
-                     pose_graph_parameters_(pose_graph_parameters), visualization_params_(visualization_parameters),
+                     const VisualizationParams &visualization_parameters, ros::NodeHandle *node_handle, amrl_msgs::VisualizationMsg viz) : dpg_parameters_(dpg_parameters),
+                     pose_graph_parameters_(pose_graph_parameters), visualization_params_(visualization_parameters), node_handle_(node_handle), vis(viz),
                      pass_number_(kInitialPassNumber), odom_initialized_(false), first_scan_for_pass_(true),
                      cumulative_dist_since_laser_laser_align_(0.0) {
         graph_ = new NonlinearFactorGraph();
         isam_ = new ISAM2(); // TODO need params?
+    	grid_publisher = node_handle_->advertise<nav_msgs::OccupancyGrid>("occupancyGrid", 1);
+   	num_curr_pass_nodes_ = 0;
     }
 
     void DpgSLAM::incrementPassNumber(const bool &should_write_results) {
         pass_number_++;
+	num_curr_pass_nodes_ = 0;
         odom_initialized_ = false;
         first_scan_for_pass_ = true;
         current_pass_nodes_.clear();
@@ -182,9 +187,10 @@ namespace dpg_slam {
             return;
         }
 
-	ROS_INFO_STREAM("DPG Execution Start");
-	if (pass_number_ >= 1)
+	if (pass_number_ >= 1) {
+		ROS_INFO_STREAM("DPG Execution Start");
 		executeDPG();
+	}
     }
 
     void DpgSLAM::publishTrajectory(amrl_msgs::VisualizationMsg &vis_msg) {
@@ -240,7 +246,7 @@ namespace dpg_slam {
                 // TODO should we also set the labels for all measurements in the first node to static since we won't
                 //  run DPG on them separately?
                 dpg_nodes_.push_back(new_node);
-                current_pass_nodes_.push_back(new_node);
+                num_curr_pass_nodes_++;
 
                 gtsam::Values init_estimate_for_new_node;
                 init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPosition().first.x(),
@@ -358,7 +364,7 @@ namespace dpg_slam {
             }
         }
         dpg_nodes_.push_back(new_node);
-        current_pass_nodes_.push_back(new_node);
+        num_curr_pass_nodes_++;
 
         gtsam::Values init_estimate_for_new_node;
         init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPosition().first.x(),
@@ -380,6 +386,8 @@ namespace dpg_slam {
             Pose2 estimated_pose = result.at<Pose2>(dpg_node.getNodeNumber());
             dpg_node.setPosition(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
         }
+	
+	std::copy(dpg_nodes_.end()-num_curr_pass_nodes_, dpg_nodes_.end(), std::back_inserter(current_pass_nodes_));
     }
 
     void DpgSLAM::addObservationConstraint(const size_t &from_node_num, const size_t &to_node_num,
@@ -551,14 +559,16 @@ namespace dpg_slam {
         float angle_inc = (angle_max - angle_min) / (ranges.size() - 1.0);
         std::vector<MeasurementPoint> measurement_points;
         uint8_t num_sectors = dpg_parameters_.num_sectors_;
-
+	ROS_INFO_STREAM("ANgle ranges in create node " << angle_min << " " << angle_max);
         float points_in_sector = ((float) ranges.size()) / num_sectors;
 
         // Make a measurement point for each range reading within range and assign it a sector
         for (size_t i = 0; i < ranges.size(); i++) {
             uint8_t sector_num = i / points_in_sector; // TODO is this correct?
             float angle = angle_inc * i + angle_min;
-            measurement_points.emplace_back(angle, ranges[i], sector_num, range_max);
+            //float currRange = std::max(range_min, std::min(ranges[i], (float)10.0));
+	    float currRange = ranges[i];
+	    measurement_points.emplace_back(angle, currRange, sector_num, range_max);
         }
 
         Measurement measurement(num_sectors, measurement_points, angle_min, angle_max, range_max, angle_inc);
@@ -643,33 +653,42 @@ namespace dpg_slam {
     }
 
     std::pair<std::vector<occupancyGrid>, occupancyGrid> DpgSLAM::computeLocalSubMap(){
-    
+   	
         // Grid of current Pose chain
         std::vector<DpgNode> currPoseChain;
         uint32_t maxNumNodes = dpg_parameters_.current_pose_chain_len_;
-        if (current_pass_nodes_.size() <= maxNumNodes){
-            // Copy all nodes from current pass
-            currPoseChain = current_pass_nodes_;
-        }
-        else {
-            // Copy latest few from current pass
-            currPoseChain.assign(current_pass_nodes_.end()-maxNumNodes, current_pass_nodes_.end());
-        }
+	uint32_t numNodesInCurrPoseChain = std::min(maxNumNodes, num_curr_pass_nodes_);
+	currPoseChain.assign(dpg_nodes_.end() - numNodesInCurrPoseChain, dpg_nodes_.end());
 
 	ROS_INFO_STREAM("Current Pose Chain Created, size: " << currPoseChain.size());
-
+	uint32_t dpg_size = dpg_nodes_.size();
 	// create occupancy grids for nodes in current pose chain
 	std::vector<occupancyGrid> currPoseChainGrids;
-	for (uint32_t i=0; i< currPoseChain.size(); i++) {
+	for (uint32_t i=0; i< numNodesInCurrPoseChain; i++) {
 	    DpgNode currNode = currPoseChain[i];
 	    currPoseChainGrids.emplace_back(currNode, dpg_parameters_, pose_graph_parameters_);
 	}
 	
+	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = currPoseChainGrids.back().getGridInfo();
+	cells_to_plot_.clear();
+	for (const auto &[cell, val] : gridinfo) {
+		if (val == OCCUPIED)
+			cells_to_plot_.emplace_back(cell.first*0.05, cell.second*0.05);
+	}
+	
 	ROS_INFO_STREAM("Occupancy Grids Created for Current Pose Chain Nodes, size: " << currPoseChainGrids.size());
-
+	
         // Grid for FOV nodes
         occupancyGrid localSubMapGrid = getSubMapCoveringCurrPoseChain(currPoseChain, currPoseChainGrids);
-	
+	ROS_INFO_STREAM("Local Submap created!");
+
+	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo2 = localSubMapGrid.getGridInfo();
+	submap_cells_to_plot_.clear();
+        for (const auto &[cell, val] : gridinfo2) {
+                submap_cells_to_plot_.emplace_back(cell.first*0.05, cell.second*0.05);
+        }
+	ROS_INFO_STREAM("submap points for visualization are stored!");
+		
 	return std::make_pair(currPoseChainGrids, localSubMapGrid);
     }
     
@@ -689,6 +708,8 @@ namespace dpg_slam {
 	}
 	uint64_t totalUncoveredCells = currentUncoveredCells.size();
 	uint64_t currentUncoveredCellsSize  = currentUncoveredCells.size();
+
+	ROS_INFO_STREAM("Uncovered Cells for current Pose chain : " << currentUncoveredCellsSize);
 	
 	// compute submap that covers the currentUncoveredCells
 	// Get max laser range
@@ -757,28 +778,44 @@ namespace dpg_slam {
     void DpgSLAM::getUpdatedCoverageForCurrentPoseChain(std::unordered_set<cellKey, boost::hash<cellKey>> &currentUncoveredCells,
 		    				       const occupancyGrid &localSubMap) {
 	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> subMapGridInfo = localSubMap.getGridInfo();
+	std::vector<cellKey> cellsToBeDeleted;
 	for (const auto& uncoveredCell : currentUncoveredCells) {
 		if(subMapGridInfo.find(uncoveredCell) != subMapGridInfo.end()) {
+			//ROS_INFO_STREAM("Found An intersection");
 			// if the key exists in local submap- erase from uncovered cells set.
-			currentUncoveredCells.erase(uncoveredCell);
+			cellsToBeDeleted.push_back(uncoveredCell);
+			//currentUncoveredCells.erase(uncoveredCell);
 		}
 	}	
+	for (const auto& cell : cellsToBeDeleted) {
+		currentUncoveredCells.erase(cell);
+	}
+	
+	ROS_INFO_STREAM("Uncovered Cells for current Pose chain : " << currentUncoveredCells.size());
     }
 
     void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
                                                            const occupancyGrid &local_submap_occ_grid,
                                                            std::vector<PointIdInfo> &removed_points) {
-        std::vector<PointIdInfo> added_points;
+        
+	ROS_INFO_STREAM("Detect and label changes for current pose chain entered");    
+	std::vector<PointIdInfo> added_points;
         std::vector<PointIdInfo> removed_points_non_deduped;
 
         for (const occupancyGrid curr_node_grid : current_submap_occ_grids) {
             detectAndLabelChangesForCurrentNode(curr_node_grid, local_submap_occ_grid, added_points,
                                                 removed_points_non_deduped);
         }
+	
+	if (added_points.size()+removed_points_non_deduped.size() == 0)
+		ROS_ERROR_STREAM("CHanges are not being commited for any of the nodes, reduce bin score threshold");
+
+	ROS_INFO_STREAM("In Detect and Label changes:: Added Points :: " << added_points.size() << " Removed Points :: "  << removed_points_non_deduped.size());
 
         for (const PointIdInfo &added_point : added_points) {
             dpg_nodes_[added_point.node_num_].setPointLabel(added_point.point_num_in_node_, ADDED);
         }
+	ROS_INFO_STREAM("Added Points are labeled");
 
         std::unordered_map<uint64_t, std::unordered_set<uint64_t>> removed_by_node_num;
         for (const PointIdInfo &removed_point : removed_points_non_deduped) {
@@ -787,13 +824,16 @@ namespace dpg_slam {
             }
             removed_by_node_num[removed_point.node_num_].insert(removed_point.point_num_in_node_);
         }
+	ROS_INFO_STREAM("removed by node_num are identified.");
 
         for (const auto &removed_for_node : removed_by_node_num) {
             for (const uint64_t &removed_index : removed_for_node.second) {
-                dpg_nodes_[removed_index].setPointLabel(removed_index, REMOVED);
+                dpg_nodes_[removed_for_node.first].setPointLabel(removed_index, REMOVED);
                 removed_points.emplace_back(PointIdInfo(removed_for_node.first, removed_index));
             }
         }
+	ROS_INFO_STREAM("Removed Points are labeled");
+	ROS_INFO_STREAM("Detected Changes are Labeled!");
     }
 
      void DpgSLAM::detectAndLabelChangesForCurrentNode(
@@ -801,7 +841,9 @@ namespace dpg_slam {
             const occupancyGrid &local_submap_occ_grid,
             std::vector<PointIdInfo> &added_points,
             std::vector<PointIdInfo> &removed_points) {
-		
+	
+	 ROS_INFO_STREAM("Detect And label changes for NODE entered");	
+      	     
 	 std::vector<PointIdInfo> added_points_at_current_node;
 	 std::vector<PointIdInfo> removed_points_at_current_node;
 	 bool commitChanges = false;
@@ -811,11 +853,9 @@ namespace dpg_slam {
              if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
                    std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
                    added_points_at_current_node.insert(added_points_at_current_node.end(), new_added.begin(), new_added.end());
-		   ROS_INFO_STREAM("Added");
             	} else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
                    std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
                    removed_points_at_current_node.insert(removed_points_at_current_node.end(), new_removed.begin(), new_removed.end());
-		   ROS_INFO_STREAM("Removed");
             	}
             }
  	 
@@ -825,7 +865,8 @@ namespace dpg_slam {
 									   removed_points_at_current_node);
 	 }
 	 if (!commitChanges) {
-		return;
+		ROS_INFO_STREAM("Changes are not commited for current pose chain node.");
+		 return;
 	 }
 
 	 // commit changes if we get here.
@@ -836,7 +877,7 @@ namespace dpg_slam {
     bool DpgSLAM::computeBinScoreAndCommitLabelsForNode(const std::vector<PointIdInfo> &added_points,
 		    					const std::vector<PointIdInfo> &removed_points) {
 
-         uint16_t totalBins = dpg_parameters_.num_bins_for_change_detection_;
+	 uint16_t totalBins = dpg_parameters_.num_bins_for_change_detection_;
 	 double change_threshold = dpg_parameters_.delta_change_threshold_;
 	 std::unordered_set<uint16_t> changedBins;
 	 bool commitChanges = false;
@@ -849,10 +890,12 @@ namespace dpg_slam {
 	 Measurement curr_node_measurement = curr_pose_chain_node.getMeasurement();
 	 float angle_min = curr_node_measurement.getMeasurementRange().first;
 	 float angle_max = curr_node_measurement.getMeasurementRange().second;
-	 float bin_increment = (angle_max - angle_min) / totalBins;
+	 ROS_INFO_STREAM("Angle min and max: " << angle_min << " " << angle_max);
+	 float bin_increment = (2.0*2.25147) / totalBins;
 	 std::pair<Vector2f, float> curr_lidar_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
 			 							 curr_node_info.first, curr_node_info.second);
-
+	
+	 ROS_INFO_STREAM("IN CHANGED POINTS :: CHANGED POINTS SIZE = " << changedPoints.size());
 	 for(const PointIdInfo& point : changedPoints) {
 		DpgNode node = dpg_nodes_[point.node_num_];
 
@@ -869,10 +912,13 @@ namespace dpg_slam {
 		Vector2f point_loc_rel_lidar = math_utils::inverseTransformPoint(pointInMapFrame, 0, curr_lidar_in_map.first, curr_lidar_in_map.second).first;	
 
 		float angle_rel_curr_node = atan2(point_loc_rel_lidar.y(), point_loc_rel_lidar.x());
-    		if ((angle_rel_curr_node > angle_max) || (angle_rel_curr_node < angle_min)) {
+    		/*
+		if ((angle_rel_curr_node > angle_max) || (angle_rel_curr_node < angle_min)) {
+			ROS_ERROR_STREAM("Invalid Angle == " << angle_rel_curr_node << " min :  " << angle_min << "  max " << angle_max);
         		continue;
     		}
-    		uint16_t binNumber = (angle_rel_curr_node - angle_min) / bin_increment;
+		*/
+    		uint16_t binNumber = (angle_rel_curr_node + 2.25147) / bin_increment;
 		changedBins.insert(binNumber);
 		current_changed_ratio = changedBins.size()/totalBins;
 		if (current_changed_ratio >= change_threshold) {
@@ -880,6 +926,10 @@ namespace dpg_slam {
 			break;
 		}	
 	 }
+	 ROS_INFO_STREAM("NumCHnagedBins = " << changedBins.size());
+	 if (changedBins.size() == 0) 
+		 ROS_ERROR_STREAM("WARNING: changed Bins = 0");
+
 	 return commitChanges;
     }
 
@@ -919,7 +969,6 @@ namespace dpg_slam {
     void DpgSLAM::executeDPG(){
 	// Should we do this only once??
 	std::pair<std::vector<occupancyGrid>, occupancyGrid> Grids = computeLocalSubMap();
-	ROS_INFO_STREAM("Occupancy Grids Created");
 	std::vector<occupancyGrid> currentPoseChainGrids = Grids.first;
 	occupancyGrid localSubMapGrid = Grids.second;
 	std::vector<PointIdInfo> removedPoints;
@@ -942,26 +991,26 @@ namespace dpg_slam {
     void DpgSLAM::updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints) {
    		
      	   // gather removed points in cartisian frame
-	   std::vector<Vector2f> removedVector;
-	   for(const PointIdInfo& point : removedPoints){
-	   	DpgNode node = dpg_nodes_[point.node_num_];
+	   std::vector<Vector2f> removedVector(removedPoints.size());
+	   for(uint32_t i =0; i< removedPoints.size(); i++){
+	   	DpgNode node = dpg_nodes_[removedPoints[i].node_num_];
 		std::pair<Eigen::Vector2f, float> NodeInfo = node.getEstimatedPosition();
 		Vector2f NodeLocation = NodeInfo.first;
 		float NodeAngle = NodeInfo.second;
 		std::pair<Vector2f, float> lidar_pose_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
                                                                                      	NodeLocation, NodeAngle);
 		std::vector<MeasurementPoint> ranges = node.getMeasurement().getMeasurements();
-		Vector2f PointInLaserFrame = ranges[point.point_num_in_node_].getPointInLaserFrame();
+		Vector2f PointInLaserFrame = ranges[removedPoints[i].point_num_in_node_].getPointInLaserFrame();
 		Vector2f pointInMapFrame = math_utils::transformPoint(PointInLaserFrame, 0,  lidar_pose_in_map.first, lidar_pose_in_map.second).first; 
-		removedVector.push_back(pointInMapFrame);
-				
-
+		removedVector[i] = pointInMapFrame;
 	   }
-
+		
+	   ROS_INFO_STREAM("Points to be deactivated are calculated in map frame");
 	   float min_frac_sectors_active = dpg_parameters_.minimum_percent_active_sectors_; 
-	   for (uint32_t i=0; i<(dpg_nodes_.size()-current_pass_nodes_.size()); i++) {
+	   for (uint32_t i=0; i<(dpg_nodes_.size()-num_curr_pass_nodes_); i++) {
 	   	dpg_nodes_[i].deactivateIntersectingSectors(removedVector, min_frac_sectors_active); 	
 	   } 
+	   ROS_INFO_STREAM("Sectors and nodes are deactivated");
     }
 
     void occupancyGrid::writeToFile(const std::string &file_name) {
@@ -989,6 +1038,8 @@ namespace dpg_slam {
         // Filling up the occupancy grid for each node.
         for(uint32_t i=0; i<Nodes_.size(); i++){
             DpgNode node = Nodes_[i];
+	    // This should be 1s for current pose chain.
+	    ROS_INFO_STREAM("In calculate occupancy grid, creating grid for node index : " << i);
             if (include_inactive_ || node.isNodeActive()) {
                 convertLaserRangeToCellKey(node);
 	    }
@@ -1043,6 +1094,8 @@ namespace dpg_slam {
         float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
         float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
 
+
+	ROS_INFO_STREAM("Node location for current occupancy Grid : " << nodePosition.x() << " " << nodePosition.y());
         std::pair<Vector2f, float> LaserInMapFrame =
                 math_utils::transformPoint(Vector2f(LaserX, LaserY),
                                            pose_graph_parameters_.laser_orientation_rel_bl_frame_,
@@ -1057,32 +1110,29 @@ namespace dpg_slam {
             if ((include_inactive_) || (scanMeasurementAtNode.isSectorActive(sector_num))) {
                 if ((point.getLabel() == MAX_RANGE) || (include_static_ && (point.getLabel() == PointLabel::STATIC)) ||
                     (include_added_ && (point.getLabel() == PointLabel::ADDED)) || (point.getLabel() == PointLabel::REMOVED)) {
-                    Eigen::Vector2f pointLocationInMapFrame(
-                            math_utils::transformPoint(scanPoint, 0, nodePosition, nodeAngle).first);
-                    cellKey cell = convertToKeyForm(pointLocationInMapFrame);
+                    cellKey cell = convertToKeyForm(scanPoint);
                     max_cell_x_ = std::max(cell.first, max_cell_x_);
                     min_cell_x_ = std::min(cell.first, min_cell_x_);
                     min_cell_y_ = std::min(cell.second, min_cell_y_);
                     max_cell_y_ = std::max(cell.second, max_cell_y_);
-
+		   	
                     if (point.getLabel() != MAX_RANGE) {
 
                         occupied_cell_info_[cell].points_.emplace_back(node.getNodeNumber(), i);
                         occupiedCells.push_back(cell);
-                    }
-
-                    float range = point.getRange();
-
-                    // Get Laser Line
-                    std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame.first,
-                                                                                                        pointLocationInMapFrame,
+                    	float range = point.getRange();
+                    	// Get Laser Line
+                    	std::vector<cellKey> emptyCellsbetweenLaserAndPoint = getIntermediateFreeCellsInFOV(LaserInMapFrame.first,
+                                                                                                        scanPoint,
                                                                                                         range);
-                    unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(),
-                                           emptyCellsbetweenLaserAndPoint.end());
+                    	unoccupiedCells.insert(unoccupiedCells.end(), emptyCellsbetweenLaserAndPoint.begin(),
+                          
+							emptyCellsbetweenLaserAndPoint.end());
+		    }
                 }
             }
         }
-
+	
         setFreeCells(unoccupiedCells);
         setOccupiedCells(occupiedCells);
     }
