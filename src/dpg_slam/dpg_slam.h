@@ -295,7 +295,7 @@ namespace dpg_slam {
          * @param visualization_parameters  Visualization parameters.
          */
         DpgSLAM(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters,
-                const VisualizationParams &visualization_parameters, ros::NodeHandle *node_handle, amrl_msgs::VisualizationMsg viz);
+                const VisualizationParams &visualization_parameters, ros::NodeHandle *node_handle, amrl_msgs::VisualizationMsg viz, const std::string &time_str);
 
         // Observe a new laser scan.
         void ObserveLaser(const std::vector<float>& ranges,
@@ -380,6 +380,8 @@ namespace dpg_slam {
          * Color to use when visualizing the odometry.
          */
         const uint32_t kOdometryEstColor = 0x3400b;
+
+        std::string time_str_;
 
         /**
          * List of nodes forming the trajectory.

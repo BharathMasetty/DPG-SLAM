@@ -28,7 +28,9 @@ namespace dpg_slam {
 
     DpgSLAM::DpgSLAM(const DpgParameters &dpg_parameters,
                      const PoseGraphParameters &pose_graph_parameters,
-                     const VisualizationParams &visualization_parameters, ros::NodeHandle *node_handle, amrl_msgs::VisualizationMsg viz) : dpg_parameters_(dpg_parameters),
+                     const VisualizationParams &visualization_parameters, ros::NodeHandle *node_handle,
+                     amrl_msgs::VisualizationMsg viz,
+                     const std::string &time_str) : dpg_parameters_(dpg_parameters), time_str_(time_str),
                      pose_graph_parameters_(pose_graph_parameters), visualization_params_(visualization_parameters), node_handle_(node_handle), vis(viz),
                      pass_number_(kInitialPassNumber), odom_initialized_(false), first_scan_for_pass_(true),
                      cumulative_dist_since_laser_laser_align_(0.0) {
@@ -40,7 +42,7 @@ namespace dpg_slam {
 
     void DpgSLAM::incrementPassNumber(const bool &should_write_results) {
         pass_number_++;
-	num_curr_pass_nodes_ = 0;
+	    num_curr_pass_nodes_ = 0;
         odom_initialized_ = false;
         first_scan_for_pass_ = true;
         current_pass_nodes_.clear();
@@ -53,23 +55,27 @@ namespace dpg_slam {
             {
                 occupancyGrid all_points_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true,
                                                   true);
-                std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1) +
+                        "_" + time_str_ + ".csv";
                 all_points_occ_grid.writeToFile(all_points_file_name);
             }
             {
                 occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, true, true);
-                std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) +
+                        "_" + time_str_ + ".csv";
                 active_occ_grid.writeToFile(all_active_file_name);
             }
             {
                 occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, false);
-                std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) +
+                                                                            "_" + time_str_ + ".csv";
                 dynamic_occ_grid.writeToFile(dynamic_grid_file_name);
             }
             {
                 occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, false,
                                                      true);
-                std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) +
+                        "_" + time_str_ + ".csv";
                 active_static_occ_grid.writeToFile(active_static_file_name);
             }
         }
@@ -81,6 +87,7 @@ namespace dpg_slam {
                 active_nodes++;
             }
         }
+        ROS_INFO_STREAM("Active nodes " << active_nodes);
     }
 
     void DpgSLAM::reoptimize() {

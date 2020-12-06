@@ -5,6 +5,7 @@
 #include "dpg_slam/parameters.h"
 #include <mutex>
 #include <condition_variable>
+#include <signal.h>
 
 DEFINE_string(new_pass_topic, "/new_pass", "Name of ROS topic that when we've received a message indicates we're on a "
                                            "new pass");
@@ -24,6 +25,7 @@ const float kMitLaserOrientationRelBLFrame = 0.0; // TODO set this
 std::mutex reoptimization_done_mutex_;
 std::condition_variable reoptimization_done_cv_;
 bool dpg_ready_ = false;
+bool run_ = true;
 
 ros::Publisher new_pass_pub_;
 
@@ -47,8 +49,14 @@ void playRosbag(const std::string &rosbag_name, const float &playback_rate, cons
             " --topics /odom /scan /Cobot/Odometry /Cobot/Laser";
     ROS_INFO_STREAM("System result: " << system(run_cmd.c_str()));
     new_pass_pub_.publish(std_msgs::Empty());
+    if (!run_) {
+        exit(0);
+    }
     std::unique_lock<std::mutex> lk(reoptimization_done_mutex_);
     reoptimization_done_cv_.wait(lk, []{return dpg_ready_;});
+    if (!run_) {
+        exit(0);
+    }
     ros::Duration(1).sleep();
     dpg_ready_ = false;
 }
@@ -100,7 +108,7 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kNewPassThetaStdDevParamName, 0.4);
 
     // 2 also works (maybe slightly better, but is slower)
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 5);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 2);
 
     // 30 also works
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 20);
@@ -128,18 +136,16 @@ std::string getBagPath(const std::string &folder_name, const std::string &bag_na
 void runOnGdcRosBags() {
     // TODO consider adding duration to cut off the end of bags where we just go back and forth forever
     playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-32-29.bag"), 1.2, 13.0, 74);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-35-41.bag"), 0.4, 7.0, 53.0);
-    /*
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-42-01.bag"), 0.7, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-43-56.bag"), 0.6, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-48-06.bag"), 0.4, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-49-55.bag"), 0.3, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-52-37.bag"), 0.2, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-54-42.bag"), 0.2, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-56-35.bag"), 0.2, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-58-44.bag"), 0.2, 0);
-    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-10-00-28.bag"), 0.2, 0);
-*/
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-35-41.bag"), 0.1, 7.0, 53.0);    
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-42-01.bag"), 0.1, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-43-56.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-48-06.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-49-55.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-52-37.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-54-42.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-56-35.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-09-58-44.bag"), 0.05, 0);
+    playRosbag(getBagPath(FLAGS_gdc_dataset_folder, "2020-11-25-10-00-28.bag"), 0.05, 0);
 }
 
 void runOnMitRosBags() {
@@ -155,9 +161,24 @@ void runOnMitRosBags() {
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.2,2,280);
     // TODO
 }
+void SignalHandler(int) {
+    if (!run_) {
+        printf("Force Exit.\n");
+        exit(0);
+    }
+    {
+        std::lock_guard<std::mutex> lk(reoptimization_done_mutex_);
+        dpg_ready_ = true;
+    }
+    reoptimization_done_cv_.notify_one();
+    printf("Exiting.\n");
+    run_ = false;
+}
 
 int main(int argc, char** argv) {
     google::ParseCommandLineFlags(&argc, &argv, false);
+    signal(SIGINT, SignalHandler);
+
 
     // Initialize ROS.
     ros::init(argc, argv, "gdc_data_runner");

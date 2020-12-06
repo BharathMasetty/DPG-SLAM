@@ -314,7 +314,14 @@ int main(int argc, char** argv) {
   dpg_slam::DpgParameters dpg_params;
   dpg_slam::VisualizationParams visualization_params;
 
-  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params, visualization_params, &n, vis_msg_);
+
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%d-%m-%Y_%H:%M:%S");
+    std::string time_str = oss.str();
+
+  slam_ = std::make_unique<dpg_slam::DpgSLAM>(dpg_params, pose_graph_params, visualization_params, &n, vis_msg_, time_str);
   InitializeMsgs();
 
   visualization_publisher_ =
