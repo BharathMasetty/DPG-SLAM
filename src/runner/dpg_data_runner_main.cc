@@ -111,7 +111,7 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 2);
 
     // 30 also works
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 200);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 20);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistAcrossPassesScanComparisonParamName, 1.5);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistWithinPassScanComparisonParamName, 5.0);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 50);
