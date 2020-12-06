@@ -87,6 +87,7 @@ void setGdcRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 0.4);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromTranslParamName, 0.4);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.4);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMinDistBetweenNodesParamName, 1.0);
 }
 
 /**
@@ -117,6 +118,7 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 50);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromTranslParamName, 0.8);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.2);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMinDistBetweenNodesParamName, 2.0);
 
 //
 //    downsample_icp_points: 2
