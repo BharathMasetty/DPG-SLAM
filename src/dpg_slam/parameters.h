@@ -54,7 +54,7 @@ namespace dpg_slam {
         /**
          * Number of nodes that should be in the current pose chain.
          */
-        uint8_t current_pose_chain_len_ =  5;
+        uint8_t current_pose_chain_len_ = 3;
 
 	/**
          * Number of bins used for change detection.
@@ -64,7 +64,7 @@ namespace dpg_slam {
         /**
          * Ratio of changed bins to total bins for a node to be considered changed.
          */
-        double delta_change_threshold_ = 0.0;
+        double delta_change_threshold_ = 0.1;
 
         /**
          * How much of the current pose graph must be covered by FOVs of the the local submap nodes.
@@ -74,12 +74,12 @@ namespace dpg_slam {
         /**
          * Occupancy grid resolution when computing the submap coverage.
          */
-        double occ_grid_resolution_ = 0.10;
+        double occ_grid_resolution_ = 0.15;
 
         /**
          * Minimum percent of sectors that have to be active for a node to be active.
          */
-        float minimum_percent_active_sectors_ = 0.60;
+        float minimum_percent_active_sectors_ = 0.20;
 
 	/**
 	 * Proximity from nodes in current pose chain to search for submap nodes.

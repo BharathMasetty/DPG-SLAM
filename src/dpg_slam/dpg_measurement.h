@@ -141,7 +141,8 @@ namespace dpg_slam {
          */
         Measurement(const uint8_t &num_sectors,
                     const std::vector<MeasurementPoint> &measurements, const float &angle_min,
-                    const float &angle_max, const float &max_range, const float &angle_increment) : num_sectors_(num_sectors), activated_sectors_(num_sectors),
+                    const float &angle_max, const float &max_range, const float &angle_increment) : num_sectors_(num_sectors),
+                    activated_sectors_(num_sectors), angle_min_(angle_min), angle_max_(angle_max),
                     max_range_(max_range), angle_increment_(angle_increment), measurements_(measurements) {
             for (uint8_t sector_num = 0; sector_num < num_sectors; sector_num++) {
                 sector_activation_[sector_num] = true;
