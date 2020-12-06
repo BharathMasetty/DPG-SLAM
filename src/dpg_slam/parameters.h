@@ -59,17 +59,17 @@ namespace dpg_slam {
 	/**
          * Number of bins used for change detection.
          */
-        uint16_t num_bins_for_change_detection_;
+        uint16_t num_bins_for_change_detection_ = 10;
 
         /**
          * Ratio of changed bins to total bins for a node to be considered changed.
          */
-        double delta_change_threshold_ = 0.20;
+        double delta_change_threshold_ = 0.0;
 
         /**
          * How much of the current pose graph must be covered by FOVs of the the local submap nodes.
          */
-        double current_pose_graph_coverage_threshold_ = 1.0;
+        double current_pose_graph_coverage_threshold_ = 0.8;
 
         /**
          * Occupancy grid resolution when computing the submap coverage.
@@ -79,7 +79,7 @@ namespace dpg_slam {
         /**
          * Minimum percent of sectors that have to be active for a node to be active.
          */
-        float minimum_percent_active_sectors_ = 0.5;
+        float minimum_percent_active_sectors_ = 0.80;
 
 	/**
 	 * Proximity from nodes in current pose chain to search for submap nodes.
