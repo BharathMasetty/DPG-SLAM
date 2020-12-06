@@ -111,11 +111,10 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 2);
 
     // 30 also works
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 20);
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistAcrossPassesScanComparisonParamName, 1.0);
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistWithinPassScanComparisonParamName, 3.0);
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 1.0);
-    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 1.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaxObsFactorsPerNodeParamName, 200);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistAcrossPassesScanComparisonParamName, 1.5);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMaximumNodeDistWithinPassScanComparisonParamName, 5.0);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromRotParamName, 50);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromTranslParamName, 0.8);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.2);
 
@@ -151,14 +150,14 @@ void runOnGdcRosBags() {
 void runOnMitRosBags() {
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 2, 25);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.8, 40, 300);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.5,4, 270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.45,15, 285);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.4,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 035,2,310);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.3,2,240);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.45,4, 270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.4,15, 285);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.35,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.3,2,310);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.25,2,240);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.2,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.1,2,290);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.05,2,280);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.15,2,290);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.1,2,280);
 
 
 
