@@ -890,8 +890,7 @@ namespace dpg_slam {
 	 Measurement curr_node_measurement = curr_pose_chain_node.getMeasurement();
 	 float angle_min = curr_node_measurement.getMeasurementRange().first;
 	 float angle_max = curr_node_measurement.getMeasurementRange().second;
-	 ROS_INFO_STREAM("Angle min and max: " << angle_min << " " << angle_max);
-	 float bin_increment = (2.0*2.25147) / totalBins;
+	 float bin_increment = (angle_max - angle_min) / totalBins;
 	 std::pair<Vector2f, float> curr_lidar_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
 			 							 curr_node_info.first, curr_node_info.second);
 	
@@ -912,13 +911,12 @@ namespace dpg_slam {
 		Vector2f point_loc_rel_lidar = math_utils::inverseTransformPoint(pointInMapFrame, 0, curr_lidar_in_map.first, curr_lidar_in_map.second).first;	
 
 		float angle_rel_curr_node = atan2(point_loc_rel_lidar.y(), point_loc_rel_lidar.x());
-    		/*
 		if ((angle_rel_curr_node > angle_max) || (angle_rel_curr_node < angle_min)) {
 			ROS_ERROR_STREAM("Invalid Angle == " << angle_rel_curr_node << " min :  " << angle_min << "  max " << angle_max);
         		continue;
     		}
-		*/
-    		uint16_t binNumber = (angle_rel_curr_node + 2.25147) / bin_increment;
+
+		uint16_t binNumber = (angle_rel_curr_node - angle_min) / bin_increment;
 		changedBins.insert(binNumber);
 		current_changed_ratio = changedBins.size()/totalBins;
 		if (current_changed_ratio >= change_threshold) {
