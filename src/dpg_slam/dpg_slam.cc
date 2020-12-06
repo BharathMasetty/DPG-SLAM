@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <fstream>
+
 #include<iterator>
 #include<algorithm>
 using namespace gtsam;
@@ -967,7 +968,7 @@ namespace dpg_slam {
     void DpgSLAM::executeDPG(){
 	// Should we do this only once??
 	std::pair<std::vector<occupancyGrid>, occupancyGrid> Grids = computeLocalSubMap();
-	/*
+
 	std::vector<occupancyGrid> currentPoseChainGrids = Grids.first;
 	occupancyGrid localSubMapGrid = Grids.second;
 	std::vector<PointIdInfo> removedPoints;
@@ -985,7 +986,7 @@ namespace dpg_slam {
 	active_added_points_ = active_added_points;
 	dynamic_removed_points_ = dynamic_removed_points;
 	dynamic_added_points_ = dynamic_added_points;
-	*/    
+
 }
 
     void DpgSLAM::updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints) {
