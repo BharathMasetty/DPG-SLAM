@@ -79,7 +79,7 @@ namespace dpg_slam {
         /**
          * Minimum percent of sectors that have to be active for a node to be active.
          */
-        float minimum_percent_active_sectors_ = 0.80;
+        float minimum_percent_active_sectors_ = 0.60;
 
 	/**
 	 * Proximity from nodes in current pose chain to search for submap nodes.
@@ -141,6 +141,9 @@ namespace dpg_slam {
             node_handle.param(kLaserOrientationInBLFrameParamName, laser_orientation_rel_bl_frame_, kDefaultLaserOrientationRelBLFrame);
             node_handle.param(kDownsampleIcpPointsRatioParamName, downsample_icp_points_ratio_, kDefaultDownsampleIcpPointsRatio);
             node_handle.param(kMaxObsFactorsPerNodeParamName, max_factors_per_node_, kDefaultMaxObsFactorsPerNode);
+            node_handle.param(kNewPassXStdDevParamName, new_pass_x_std_dev_, kDefaultNewPassXStdDev);
+            node_handle.param(kNewPassYStdDevParamName, new_pass_y_std_dev_, kDefaultNewPassYStdDev);
+            node_handle.param(kNewPassThetaStdDevParamName, new_pass_theta_std_dev_, kDefaultNewPassThetaStdDev);
         }
 
         /**
@@ -267,14 +270,29 @@ namespace dpg_slam {
         const float kDefaultNewPassXStdDev = 0.2; // TODO tune
 
         /**
+         * ROS param name for the standard deviation for the x component of the prior put on the first node in a pass.
+         */
+        static constexpr const char *kNewPassXStdDevParamName = "new_pass_x_std_dev";
+
+        /**
          * Default standard deviation for the y component of the prior put on the first node in a pass.
          */
         const float kDefaultNewPassYStdDev = 0.2; // TODO tune
 
         /**
+         * ROS param name for the standard deviation for the y component of the prior put on the first node in a pass.
+         */
+        static constexpr const char *kNewPassYStdDevParamName = "new_pass_y_std_dev";
+
+        /**
          * Default standard deviation for the theta component of the prior put on the first node in a pass.
          */
         const float kDefaultNewPassThetaStdDev = 0.15; // TODO tune
+
+        /**
+         * ROS param name for the standard deviation for the theta component of the prior put on the first node in a pass.
+         */
+        static constexpr const char *kNewPassThetaStdDevParamName = "new_pass_theta_std_dev";
 
         /**
          * Default multiplier for translational error from translation (used in odometry constraints).

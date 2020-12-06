@@ -8,10 +8,23 @@
 #include <gtsam/nonlinear/ISAM2.h>
 #include<iterator>
 #include<algorithm> 
+#include <fstream>
+
 using namespace gtsam;
 using namespace Eigen;
 
 namespace dpg_slam {
+
+    void writeCsv(const std::string &file_name, const std::vector<std::vector<std::string>> &data_to_write) {
+        std::ofstream output_file(file_name.c_str());
+        for (const std::vector<std::string> &line_of_data : data_to_write) {
+            for (const std::string &entry_in_line : line_of_data) {
+                output_file << entry_in_line << ",";
+            }
+            output_file << "\n";
+        }
+        output_file.close();
+    }
 
     DpgSLAM::DpgSLAM(const DpgParameters &dpg_parameters,
                      const PoseGraphParameters &pose_graph_parameters,
@@ -25,8 +38,7 @@ namespace dpg_slam {
    	num_curr_pass_nodes_ = 0;
     }
 
-
-    void DpgSLAM::incrementPassNumber() {
+    void DpgSLAM::incrementPassNumber(const bool &should_write_results) {
         pass_number_++;
 	num_curr_pass_nodes_ = 0;
         odom_initialized_ = false;
@@ -34,7 +46,38 @@ namespace dpg_slam {
         current_pass_nodes_.clear();
 
         reoptimize();
+
+        if (should_write_results) {
+            // Construct the various occupancy grids
+            // Want active, active-static, dynamic (all added + removed), all
+            {
+                occupancyGrid all_points_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true,
+                                                  true);
+                std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                all_points_occ_grid.writeToFile(all_points_file_name);
+            }
+            {
+                occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, true, true);
+                std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+            }
+            {
+                occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, false);
+                std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+            }
+            {
+                occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, false,
+                                                     true);
+                std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+            }
+        }
         ROS_INFO_STREAM("Done reoptimizing");
+        ROS_INFO_STREAM("Total nodes " << dpg_nodes_.size());
+        int active_nodes = 0;
+        for (const DpgNode &node : dpg_nodes_) {
+            if (node.isActive()) {
+                active_nodes++;
+            }
+        }
     }
 
     void DpgSLAM::reoptimize() {
@@ -93,20 +136,24 @@ namespace dpg_slam {
             }
             addObservationConstraint(prev_node.getNodeNumber(), curr_node.getNodeNumber(), successive_scan_offset);
 
-            for (size_t j = 0; j < i - 1; j+= 1) {
-                // TODO consider adding max factors here if reoptimization is too slow, perhaps with a higher max factor count
-                DpgNode loop_closure_node = dpg_nodes_[j];
+            if (pose_graph_parameters_.non_successive_scan_constraints_) {
+                for (size_t j = 0; j < i - 1; j+= 1) {
+                    // TODO consider adding max factors here if reoptimization is too slow, perhaps with a higher max factor count
+                    DpgNode loop_closure_node = dpg_nodes_[j];
 
-                float node_dist = (loop_closure_node.getEstimatedPosition().first - curr_node.getEstimatedPosition().first).norm();
-                float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
-                        pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_ : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+                    float node_dist = (loop_closure_node.getEstimatedPosition().first -
+                                       curr_node.getEstimatedPosition().first).norm();
+                    float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
+                                                pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_
+                                                                                                                 : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
 
-                if (node_dist <= node_dist_threshold) {
+                    if (node_dist <= node_dist_threshold) {
 
-                    std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
-                    if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
-                        addObservationConstraint(loop_closure_node.getNodeNumber(), curr_node.getNodeNumber(),
-                                                 non_successive_scan_offset);
+                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+                        if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
+                            addObservationConstraint(loop_closure_node.getNodeNumber(), curr_node.getNodeNumber(),
+                                                     non_successive_scan_offset);
+                        }
                     }
                 }
             }
@@ -140,7 +187,7 @@ namespace dpg_slam {
             return;
         }
 
-	if (pass_number_ >= 1) {
+	if (pass_number_ >= 1 && num_curr_pass_nodes_ > 1) {
 		ROS_INFO_STREAM("DPG Execution Start");
 		executeDPG();
 	}
@@ -610,7 +657,7 @@ namespace dpg_slam {
         // Grid of current Pose chain
         std::vector<DpgNode> currPoseChain;
         uint32_t maxNumNodes = dpg_parameters_.current_pose_chain_len_;
-	uint32_t numNodesInCurrPoseChain = std::min(maxNumNodes, num_curr_pass_nodes_);
+	uint32_t numNodesInCurrPoseChain = std::min(maxNumNodes, num_curr_pass_nodes_- 1);
 	currPoseChain.assign(dpg_nodes_.end() - numNodesInCurrPoseChain, dpg_nodes_.end());
 
 	ROS_INFO_STREAM("Current Pose Chain Created, size: " << currPoseChain.size());
@@ -670,7 +717,7 @@ namespace dpg_slam {
 	double currentCoverage = 0;
 	bool isThresholdMet = false;
 
-	for (uint32_t j=0; j<(dpg_nodes_.size()-current_pass_nodes_.size()); j++) { 
+	for (uint32_t j=0; j<(dpg_nodes_.size()-num_curr_pass_nodes_); j++) { 
 		
 		DpgNode pastNode = dpg_nodes_[j];
 		if (!pastNode.isNodeActive())
@@ -829,6 +876,7 @@ namespace dpg_slam {
     bool DpgSLAM::computeBinScoreAndCommitLabelsForNode(const std::vector<PointIdInfo> &added_points,
 		    					const std::vector<PointIdInfo> &removed_points) {
 
+	 ROS_INFO_STREAM("Compute bin score entered");
 	 uint16_t totalBins = dpg_parameters_.num_bins_for_change_detection_;
 	 double change_threshold = dpg_parameters_.delta_change_threshold_;
 	 std::unordered_set<uint16_t> changedBins;
@@ -921,7 +969,6 @@ namespace dpg_slam {
     void DpgSLAM::executeDPG(){
 	// Should we do this only once??
 	std::pair<std::vector<occupancyGrid>, occupancyGrid> Grids = computeLocalSubMap();
-	/*
 	std::vector<occupancyGrid> currentPoseChainGrids = Grids.first;
 	occupancyGrid localSubMapGrid = Grids.second;
 	std::vector<PointIdInfo> removedPoints;
@@ -939,7 +986,6 @@ namespace dpg_slam {
 	active_added_points_ = active_added_points;
 	dynamic_removed_points_ = dynamic_removed_points;
 	dynamic_added_points_ = dynamic_added_points;
-	*/    
 }
 
     void DpgSLAM::updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints) {
@@ -965,6 +1011,27 @@ namespace dpg_slam {
 	   	dpg_nodes_[i].deactivateIntersectingSectors(removedVector, min_frac_sectors_active); 	
 	   } 
 	   ROS_INFO_STREAM("Sectors and nodes are deactivated");
+    }
+
+    void occupancyGrid::writeToFile(const std::string &file_name) {
+        std::vector<std::vector<std::string>> strings_to_write;
+        strings_to_write.emplace_back((std::vector<std::string>){
+            (std::string) "occ_grid_resolution", std::to_string(dpg_parameters_.occ_grid_resolution_)});
+        strings_to_write.emplace_back((std::vector<std::string>){
+                std::string("x"), std::string("y"), std::string("occupancy")});
+
+        for (const auto &cell_info : gridInfo) {
+            std::string occ_val;
+            if (cell_info.second == OCCUPIED) {
+                occ_val = std::to_string(1);
+            } else if (cell_info.second == FREE) {
+                occ_val = std::to_string(0);
+            }
+            // For now, not writing unknown
+            strings_to_write.emplace_back((std::vector<std::string>) {
+                std::to_string(cell_info.first.first), std::to_string(cell_info.first.second), occ_val});
+        }
+        writeCsv(file_name, strings_to_write);
     }
 
     void occupancyGrid::calculateOccupancyGrid(){

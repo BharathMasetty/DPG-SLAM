@@ -39,6 +39,8 @@ struct OccupiedCellInfo {
 };
 
 namespace dpg_slam {
+
+    void writeCsv(const std::string &file_name, const std::vector<std::vector<std::string>> &data_to_write);
     
     /**
      * Data structure to define the occupancy grid.
@@ -154,6 +156,17 @@ namespace dpg_slam {
      * visualizing submap, will be false when we want to get the occ grid for the different results layers).
      */
     void toOccGridMsg(nav_msgs::OccupancyGrid &occ_grid_msg, bool distinguish_free);
+
+    /**
+     * Write the occupancy grid to a file.
+     *
+     * The file will be a CSV with the first line containing the resolution, the second line providing the format of
+     * the occupancy data, and subsequent lines containing comma separated tuples of the occupied/free cells
+     * (x, y, <0 if free, 1 if occupied>).
+     *
+     * @param file_name File name to write to.
+     */
+    void writeToFile(const std::string &file_name);
 
     /**
      * Mapping from keys based on cell location in map to the boolean representing of there is a map point in the grid or not.
@@ -298,9 +311,9 @@ namespace dpg_slam {
         /**
          * Increment the pass number to indicate that we're on the next pass.
          *
-         * TODO Need to hook this up to something
+         * @param should_write_results True if we should write results to files, false if not.
          */
-        void incrementPassNumber();
+        void incrementPassNumber(const bool &should_write_results);
 
         // Get latest map.
         std::vector<Eigen::Vector2f> GetMap();
