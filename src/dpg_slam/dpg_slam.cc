@@ -61,15 +61,18 @@ namespace dpg_slam {
             {
                 occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, true, true);
                 std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                active_occ_grid.writeToFile(all_active_file_name);
             }
             {
                 occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, false);
                 std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                dynamic_occ_grid.writeToFile(dynamic_grid_file_name);
             }
             {
                 occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, false,
                                                      true);
                 std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) + ".csv";
+                active_static_occ_grid.writeToFile(active_static_file_name);
             }
         }
         ROS_INFO_STREAM("Done reoptimizing");
