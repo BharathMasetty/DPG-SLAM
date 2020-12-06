@@ -625,8 +625,7 @@ namespace dpg_slam {
 	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = currPoseChainGrids.back().getGridInfo();
 	cells_to_plot_.clear();
 	for (const auto &[cell, val] : gridinfo) {
-		if (val == OCCUPIED)
-			cells_to_plot_.emplace_back(cell.first*0.05, cell.second*0.05);
+		cells_to_plot_.emplace_back(cell.first*0.10, cell.second*0.10);
 	}
 	
 	ROS_INFO_STREAM("Occupancy Grids Created for Current Pose Chain Nodes, size: " << currPoseChainGrids.size());
@@ -638,7 +637,7 @@ namespace dpg_slam {
 	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo2 = localSubMapGrid.getGridInfo();
 	submap_cells_to_plot_.clear();
         for (const auto &[cell, val] : gridinfo2) {
-                submap_cells_to_plot_.emplace_back(cell.first*0.05, cell.second*0.05);
+                submap_cells_to_plot_.emplace_back(cell.first*0.10, cell.second*0.10);
         }
 	ROS_INFO_STREAM("submap points for visualization are stored!");
 		
@@ -922,6 +921,7 @@ namespace dpg_slam {
     void DpgSLAM::executeDPG(){
 	// Should we do this only once??
 	std::pair<std::vector<occupancyGrid>, occupancyGrid> Grids = computeLocalSubMap();
+	/*
 	std::vector<occupancyGrid> currentPoseChainGrids = Grids.first;
 	occupancyGrid localSubMapGrid = Grids.second;
 	std::vector<PointIdInfo> removedPoints;
@@ -939,7 +939,8 @@ namespace dpg_slam {
 	active_added_points_ = active_added_points;
 	dynamic_removed_points_ = dynamic_removed_points;
 	dynamic_added_points_ = dynamic_added_points;
-    }
+	*/    
+}
 
     void DpgSLAM::updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints) {
    		
