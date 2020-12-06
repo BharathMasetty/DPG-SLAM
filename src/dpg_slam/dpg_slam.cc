@@ -652,7 +652,7 @@ namespace dpg_slam {
         return false;
     }
 
-    std::pair<std::vector<occupancyGrid>, occupancyGrid> DpgSLAM::computeLocalSubMap(){
+    std::pair<std::vector<std::pair<uint64_t, occupancyGrid>>, occupancyGrid> DpgSLAM::computeLocalSubMap(){
    	
         // Grid of current Pose chain
         std::vector<DpgNode> currPoseChain;
@@ -663,13 +663,13 @@ namespace dpg_slam {
 	ROS_INFO_STREAM("Current Pose Chain Created, size: " << currPoseChain.size());
 	uint32_t dpg_size = dpg_nodes_.size();
 	// create occupancy grids for nodes in current pose chain
-	std::vector<occupancyGrid> currPoseChainGrids;
+	std::vector<std::pair<uint64_t, occupancyGrid>> currPoseChainGrids;
 	for (uint32_t i=0; i< numNodesInCurrPoseChain; i++) {
 	    DpgNode currNode = currPoseChain[i];
-	    currPoseChainGrids.emplace_back(currNode, dpg_parameters_, pose_graph_parameters_);
+	    currPoseChainGrids.emplace_back(std::make_pair(currNode.getNodeNumber(), occupancyGrid(currNode, dpg_parameters_, pose_graph_parameters_)));
 	}
 	
-	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = currPoseChainGrids.back().getGridInfo();
+	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = currPoseChainGrids.back().second.getGridInfo();
 	cells_to_plot_.clear();
 	for (const auto &[cell, val] : gridinfo) {
 		cells_to_plot_.emplace_back(cell.first*0.10, cell.second*0.10);
@@ -692,7 +692,7 @@ namespace dpg_slam {
     }
     
     occupancyGrid DpgSLAM::getSubMapCoveringCurrPoseChain(const std::vector<DpgNode> &poseChain, 
-		    						const std::vector<occupancyGrid> &poseChainGrids) {
+		    						const std::vector<std::pair<uint64_t, occupancyGrid>> &poseChainGrids) {
 	
 	occupancyGrid subMapOccupancyGrid(dpg_parameters_, pose_graph_parameters_);
 	std::unordered_set<cellKey, boost::hash<cellKey>> currentUncoveredCells;
@@ -700,7 +700,7 @@ namespace dpg_slam {
 
 	// populate the list of uncovered cells
 	for (uint32_t i=0; i<poseChainGrids.size(); i++) {
-		std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> currNodeGridInfo = poseChainGrids[i].getGridInfo();
+		std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> currNodeGridInfo = poseChainGrids[i].second.getGridInfo();
 		for (const auto &kv : currNodeGridInfo) { 
 			currentUncoveredCells.insert(kv.first);
 		}
@@ -793,7 +793,7 @@ namespace dpg_slam {
 	ROS_INFO_STREAM("Uncovered Cells for current Pose chain : " << currentUncoveredCells.size());
     }
 
-    void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<occupancyGrid> &current_submap_occ_grids,
+    void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<std::pair<uint64_t, occupancyGrid>> &current_submap_occ_grids,
                                                            const occupancyGrid &local_submap_occ_grid,
                                                            std::vector<PointIdInfo> &removed_points) {
         
@@ -801,7 +801,7 @@ namespace dpg_slam {
 	std::vector<PointIdInfo> added_points;
         std::vector<PointIdInfo> removed_points_non_deduped;
 
-        for (const occupancyGrid curr_node_grid : current_submap_occ_grids) {
+        for (const std::pair<uint64_t, occupancyGrid> &curr_node_grid : current_submap_occ_grids) {
             detectAndLabelChangesForCurrentNode(curr_node_grid, local_submap_occ_grid, added_points,
                                                 removed_points_non_deduped);
         }
@@ -836,7 +836,7 @@ namespace dpg_slam {
     }
 
      void DpgSLAM::detectAndLabelChangesForCurrentNode(
-            const occupancyGrid &current_node_occ_grid,
+            const std::pair<uint64_t, occupancyGrid> &current_node_occ_grid,
             const occupancyGrid &local_submap_occ_grid,
             std::vector<PointIdInfo> &added_points,
             std::vector<PointIdInfo> &removed_points) {
@@ -846,11 +846,11 @@ namespace dpg_slam {
 	 std::vector<PointIdInfo> added_points_at_current_node;
 	 std::vector<PointIdInfo> removed_points_at_current_node;
 	 bool commitChanges = false;
-         
-	 for (const auto &occ_grid_entry : current_node_occ_grid.getGridInfo()) {
+
+	 for (const auto &occ_grid_entry : current_node_occ_grid.second.getGridInfo()) {
              CellStatus local_submap_occupancy = local_submap_occ_grid.getCellStatus(occ_grid_entry.first);
              if ((occ_grid_entry.second == OCCUPIED) && (local_submap_occupancy == FREE)) {
-                   std::vector<PointIdInfo> new_added = current_node_occ_grid.getPointsInOccCell(occ_grid_entry.first);
+                   std::vector<PointIdInfo> new_added = current_node_occ_grid.second.getPointsInOccCell(occ_grid_entry.first);
                    added_points_at_current_node.insert(added_points_at_current_node.end(), new_added.begin(), new_added.end());
             	} else if ((occ_grid_entry.second == FREE) && (local_submap_occupancy == OCCUPIED)) {
                    std::vector<PointIdInfo> new_removed = local_submap_occ_grid.getPointsInOccCell(occ_grid_entry.first);
@@ -860,7 +860,7 @@ namespace dpg_slam {
  	 
 	 // if newly detected changes at node are non zero, check the score.
 	 if (added_points_at_current_node.size()+removed_points_at_current_node.size() > 0) {
-	 	commitChanges = computeBinScoreAndCommitLabelsForNode(added_points_at_current_node,
+	 	commitChanges = computeBinScoreAndCommitLabelsForNode(current_node_occ_grid.first, added_points_at_current_node,
 									   removed_points_at_current_node);
 	 }
 	 if (!commitChanges) {
@@ -871,9 +871,10 @@ namespace dpg_slam {
 	 // commit changes if we get here.
 	 added_points.insert(added_points.end(), added_points_at_current_node.begin(), added_points_at_current_node.end());
 	 removed_points.insert(removed_points.end(), removed_points_at_current_node.begin(), removed_points_at_current_node.end());
+	 ROS_INFO_STREAM("Detect and label exiting");
     }
 
-    bool DpgSLAM::computeBinScoreAndCommitLabelsForNode(const std::vector<PointIdInfo> &added_points,
+    bool DpgSLAM::computeBinScoreAndCommitLabelsForNode(const uint64_t &curr_node_num, const std::vector<PointIdInfo> &added_points,
 		    					const std::vector<PointIdInfo> &removed_points) {
 
 	 uint16_t totalBins = dpg_parameters_.num_bins_for_change_detection_;
@@ -883,8 +884,8 @@ namespace dpg_slam {
 	 double current_changed_ratio = 0.0;
 	 std::vector<PointIdInfo> changedPoints = added_points;
 	 changedPoints.insert(changedPoints.end(), removed_points.begin(), removed_points.end());
+    DpgNode curr_pose_chain_node = dpg_nodes_[curr_node_num];
 
-	 DpgNode curr_pose_chain_node = dpg_nodes_[added_points.back().node_num_];
 	 std::pair<Eigen::Vector2f, float> curr_node_info =  curr_pose_chain_node.getEstimatedPosition();
 	 Measurement curr_node_measurement = curr_pose_chain_node.getMeasurement();
 	 float angle_min = curr_node_measurement.getMeasurementRange().first;
@@ -965,9 +966,8 @@ namespace dpg_slam {
 
     void DpgSLAM::executeDPG(){
 	// Should we do this only once??
-	std::pair<std::vector<occupancyGrid>, occupancyGrid> Grids = computeLocalSubMap();
-
-	std::vector<occupancyGrid> currentPoseChainGrids = Grids.first;
+	std::pair<std::vector<std::pair<uint64_t, occupancyGrid>>, occupancyGrid> Grids = computeLocalSubMap();
+	std::vector<std::pair<uint64_t, occupancyGrid>> currentPoseChainGrids = Grids.first;
 	occupancyGrid localSubMapGrid = Grids.second;
 	std::vector<PointIdInfo> removedPoints;
 	detectAndLabelChangesForCurrentPoseChain(currentPoseChainGrids, localSubMapGrid, removedPoints);
