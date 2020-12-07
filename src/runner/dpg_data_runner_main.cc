@@ -90,6 +90,9 @@ void setGdcRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMinDistBetweenNodesParamName, 1.0);
 
     node_handle.setParam(dpg_slam::DpgParameters::kDeltaChangeThresholdParamName, 0.1);
+
+    node_handle.setParam(dpg_slam::DpgParameters::kOccGridResolutionParamName, 0.15);
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kReoptimizationMaxObsFactorsPerNodeParamName, 400);
 }
 
 /**
@@ -110,7 +113,7 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
 
     node_handle.setParam(dpg_slam::PoseGraphParameters::kNewPassThetaStdDevParamName, 0.4);
 
-    // 2 also works (maybe slightly better, but is slower)
+    // 5 also works but is slightly worse at aligning
     node_handle.setParam(dpg_slam::PoseGraphParameters::kDownsampleIcpPointsRatioParamName, 2);
 
     // 30 also works
@@ -124,14 +127,8 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
 
     node_handle.setParam(dpg_slam::DpgParameters::kDeltaChangeThresholdParamName, 0.2);
 
-//
-//    downsample_icp_points: 2
-//    max_obs_factors_per_node: 200
-//    maximum_node_dist_across_passes_scan_comparison: 1.0
-//    maximum_node_dist_within_pass_scan_comparison: 3
-//    motion_rot_from_rot: 50
-//    motion_rot_from_transl: 0.8
-//    motion_transl_from_rot: 0.2
+    node_handle.setParam(dpg_slam::PoseGraphParameters::kReoptimizationMaxObsFactorsPerNodeParamName, 30);
+    node_handle.setParam(dpg_slam::DpgParameters::kOccGridResolutionParamName, 0.3);
 }
 
 std::string getBagPath(const std::string &folder_name, const std::string &bag_name) {
@@ -155,32 +152,26 @@ void runOnGdcRosBags() {
 
 void runOnMitRosBags() {
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 2, 25);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.3, 40, 300);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.4,4, 270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.2,15, 285);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.15,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.15,2,310);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.15,2,240);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.1,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.1,2,290);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.1,2,280);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.5, 40, 300);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.3,4, 270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.3,15, 285);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.3,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.3,2,310);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.3,2,240);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.25,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.2,2,290);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.15,2,280);
 
-
-
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__1_25_2009___21_49_b21.bag"), 0.05, 0, 265);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__3_18_2009___23_31_b21.bag"), 0.05, 0, 283);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__3_18_2009___23_53_b21.bag"), 0.05, 0, 285);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__1_19_2009___2_42_b21.bag"), 0.05, 0, 295);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__3_19_2009___0_18_b21.bag"), 0.05, 0, 283);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__1_19_2009___3_5_b21.bag"), 0.05, 0, 273);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.05, 0, 318);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__3_19_2009___0_54_b21.bag"), 0.05, 0, 276);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__1_25_2009___20_20_b21.bag"), 0.05, 0, 263);
-playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__1_25_2009___20_53_b21.bag"), 0.05, 0, 266);
-
-
-
-    // TODO
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__1_25_2009___21_49_b21.bag"), 0.15, 0, 265);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__3_18_2009___23_31_b21.bag"), 0.15, 0, 283);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__3_18_2009___23_53_b21.bag"), 0.15, 0, 285);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__1_19_2009___2_42_b21.bag"), 0.15, 0, 295);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__3_19_2009___0_18_b21.bag"), 0.15, 0, 283);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__1_19_2009___3_5_b21.bag"), 0.15, 0, 273);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.15, 0, 318);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__3_19_2009___0_54_b21.bag"), 0.15, 0, 276);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__1_25_2009___20_20_b21.bag"), 0.15, 0, 263);
+//    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__1_25_2009___20_53_b21.bag"), 0.15, 0, 266);
 }
 void SignalHandler(int) {
     if (!run_) {

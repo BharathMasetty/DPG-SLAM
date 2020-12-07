@@ -36,6 +36,7 @@ namespace dpg_slam {
         // TODO set the rest of the params, maybe make them loadable via rosparam server
         DpgParameters(ros::NodeHandle &node_handle) : num_sectors_(kDefaultNumSectors) {
             node_handle.param(kDeltaChangeThresholdParamName, delta_change_threshold_, kDefaultDeltaChangeThreshold);
+            node_handle.param(kOccGridResolutionParamName, occ_grid_resolution_, kDefaultOocGridResolution);
         }
 
         /**
@@ -72,6 +73,16 @@ namespace dpg_slam {
         const double kDefaultDeltaChangeThreshold = 0.1;
 
         /**
+         * ROS param name for the occupancy grid resolution when computing the submap coverage.
+         */
+        static constexpr const char *kOccGridResolutionParamName = "occ_grid_resolution";
+
+        /**
+         * Default value for the occupancy grid resolution when computing the submap coverage.
+         */
+        const double kDefaultOocGridResolution = 0.15;
+
+        /**
          * Ratio of changed bins to total bins for a node to be considered changed.
          */
         double delta_change_threshold_;
@@ -84,7 +95,7 @@ namespace dpg_slam {
         /**
          * Occupancy grid resolution when computing the submap coverage.
          */
-        double occ_grid_resolution_ = 0.15;
+        double occ_grid_resolution_;
 
         /**
          * Minimum percent of sectors that have to be active for a node to be active.
@@ -151,6 +162,7 @@ namespace dpg_slam {
             node_handle.param(kLaserOrientationInBLFrameParamName, laser_orientation_rel_bl_frame_, kDefaultLaserOrientationRelBLFrame);
             node_handle.param(kDownsampleIcpPointsRatioParamName, downsample_icp_points_ratio_, kDefaultDownsampleIcpPointsRatio);
             node_handle.param(kMaxObsFactorsPerNodeParamName, max_factors_per_node_, kDefaultMaxObsFactorsPerNode);
+            node_handle.param(kReoptimizationMaxObsFactorsPerNodeParamName, reoptimization_max_factors_per_node_, kDefaultReoptimizationMaxObsFactorsPerNode);
             node_handle.param(kNewPassXStdDevParamName, new_pass_x_std_dev_, kDefaultNewPassXStdDev);
             node_handle.param(kNewPassYStdDevParamName, new_pass_y_std_dev_, kDefaultNewPassYStdDev);
             node_handle.param(kNewPassThetaStdDevParamName, new_pass_theta_std_dev_, kDefaultNewPassThetaStdDev);
@@ -438,6 +450,17 @@ namespace dpg_slam {
         const int kDefaultMaxObsFactorsPerNode = 15;
 
         /**
+         * ROS param name for the maximum number of non-successive observation factors that we can have per node
+         * during reoptimization.
+         */
+        static constexpr const char *kReoptimizationMaxObsFactorsPerNodeParamName = "reoptimization_max_obs_factors_per_node";
+
+        /**
+         * Default maximum number of non-successive observation factors that we can have per node during reoptimization.
+         */
+        const int kDefaultReoptimizationMaxObsFactorsPerNode = 400;
+
+        /**
          * Default value for the number of factors that we should skip at a time when determining which factors to
          * consider adding.
          */
@@ -606,6 +629,11 @@ namespace dpg_slam {
          * Maximum number of non-successive observation factors that we can have per node.
          */
         int max_factors_per_node_;
+
+        /**
+         * Maximum number of non-successive observation factors that we can have per node during reoptimization.
+         */
+        int reoptimization_max_factors_per_node_;
 
         /**
          * Number of factors that we should skip at a time when determining which factors to consider adding.

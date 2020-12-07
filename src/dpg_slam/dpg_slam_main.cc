@@ -168,7 +168,7 @@ void PublishMap() {
     visualization::DrawPoint(p, 0xeb1056, vis_msg_);
   }
 
-  slam_->publishTrajectory(vis_msg_);
+//  slam_->publishTrajectory(vis_msg_);
   visualization_publisher_.publish(vis_msg_);
 }
 
