@@ -54,26 +54,26 @@ namespace dpg_slam {
             // Construct the various occupancy grids
             // Want active, active-static, dynamic (all added + removed), all
             {
-                occupancyGrid all_points_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true,
+                occupancyGrid all_points_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, true,
                                                   true);
                 std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1) +
                         "_" + time_str_ + ".csv";
                 all_points_occ_grid.writeToFile(all_points_file_name);
             }
             {
-                occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, true, true);
+                occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, false, true, true);
                 std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) +
                         "_" + time_str_ + ".csv";
                 active_occ_grid.writeToFile(all_active_file_name);
             }
             {
-                occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, false);
+                occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, true, false);
                 std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) +
                                                                             "_" + time_str_ + ".csv";
                 dynamic_occ_grid.writeToFile(dynamic_grid_file_name);
             }
             {
-                occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, false,
+                occupancyGrid active_static_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, false, false,
                                                      true);
                 std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) +
                         "_" + time_str_ + ".csv";
@@ -733,49 +733,60 @@ namespace dpg_slam {
 	double currentCoverage = 0;
 	bool isThresholdMet = false;
 
-	for (uint32_t j=0; j<(dpg_nodes_.size()-num_curr_pass_nodes_); j++) { 
-		
-		DpgNode pastNode = dpg_nodes_[j];
-		if (!pastNode.isNodeActive())
-			continue;
+	int skip_count = 1;
+    size_t start_num = 0;
+    size_t compare_num = dpg_nodes_.size() - num_curr_pass_nodes_;
 
-                std::pair<Vector2f, float> pastNodeInfo = pastNode.getEstimatedPosition();
-                Vector2f pastNodePosition = pastNodeInfo.first;
-		// checking if the past node is close to any of the current nodes.
-		bool isInProximity = false;
-		for (uint32_t i=0; i<poseChain.size(); i++) {
-			DpgNode currNode = poseChain[i];
-                	std::pair<Vector2f, float> currentNodeInfo = currNode.getEstimatedPosition();
-               		Vector2f currentNodePosition = currentNodeInfo.first;
-			float distanceToPastNode = (currentNodePosition - pastNodePosition).norm();
-			if (distanceToPastNode <= proximityThreshold) {
-				isInProximity = true;
-				break;
-			}
-		}		
-		
-		if (!isInProximity)
-			continue;	
+    if (compare_num > pose_graph_parameters_.factor_evaluation_skip_number_) {
+        skip_count = pose_graph_parameters_.factor_evaluation_skip_number_ * (1 + pass_number_);
+        start_num = dpg_nodes_.size() % skip_count;
+    }
 
-		if (!isLocalSubmapInitialized) {
-			occupancyGrid tempCombinedGrid(dpg_nodes_[j], dpg_parameters_, pose_graph_parameters_);
-			getUpdatedCoverageForCurrentPoseChain(currentUncoveredCells, tempCombinedGrid);
-			uint32_t newCurrentUncoveredCellsSize  = currentUncoveredCells.size();
-			if (newCurrentUncoveredCellsSize < currentUncoveredCellsSize) {
-                        	subMapOccupancyGrid = tempCombinedGrid;
-                        	isLocalSubmapInitialized = true;
-                        	currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
-                	}
-		} else{
-			occupancyGrid tempGrid(dpg_nodes_[j], dpg_parameters_, pose_graph_parameters_);
-                        occupancyGrid tempCombinedGrid(subMapOccupancyGrid, tempGrid, dpg_parameters_, pose_graph_parameters_);
-			getUpdatedCoverageForCurrentPoseChain(currentUncoveredCells, tempCombinedGrid);
-			uint32_t newCurrentUncoveredCellsSize  = currentUncoveredCells.size();
-			if (newCurrentUncoveredCellsSize < currentUncoveredCellsSize) {
-				subMapOccupancyGrid = tempCombinedGrid;
-				currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
-			}
-		}
+    for (int run_num = 0; run_num < skip_count; run_num++) {
+        for (size_t j = ((start_num + run_num) % skip_count); j < compare_num; j+= skip_count) {
+
+            DpgNode pastNode = dpg_nodes_[j];
+            if (!pastNode.isNodeActive())
+                continue;
+
+            std::pair<Vector2f, float> pastNodeInfo = pastNode.getEstimatedPosition();
+            Vector2f pastNodePosition = pastNodeInfo.first;
+            // checking if the past node is close to any of the current nodes.
+            bool isInProximity = false;
+            for (uint32_t i = 0; i < poseChain.size(); i++) {
+                DpgNode currNode = poseChain[i];
+                std::pair<Vector2f, float> currentNodeInfo = currNode.getEstimatedPosition();
+                Vector2f currentNodePosition = currentNodeInfo.first;
+                float distanceToPastNode = (currentNodePosition - pastNodePosition).norm();
+                if (distanceToPastNode <= proximityThreshold) {
+                    isInProximity = true;
+                    break;
+                }
+            }
+
+            if (!isInProximity)
+                continue;
+
+            if (!isLocalSubmapInitialized) {
+                occupancyGrid tempCombinedGrid(dpg_nodes_[j], dpg_parameters_, pose_graph_parameters_);
+                getUpdatedCoverageForCurrentPoseChain(currentUncoveredCells, tempCombinedGrid);
+                uint32_t newCurrentUncoveredCellsSize = currentUncoveredCells.size();
+                if (newCurrentUncoveredCellsSize < currentUncoveredCellsSize) {
+                    subMapOccupancyGrid = tempCombinedGrid;
+                    isLocalSubmapInitialized = true;
+                    currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
+                }
+            } else {
+                occupancyGrid tempGrid(dpg_nodes_[j], dpg_parameters_, pose_graph_parameters_);
+                occupancyGrid tempCombinedGrid(subMapOccupancyGrid, tempGrid, dpg_parameters_, pose_graph_parameters_);
+                getUpdatedCoverageForCurrentPoseChain(currentUncoveredCells, tempCombinedGrid);
+                uint32_t newCurrentUncoveredCellsSize = currentUncoveredCells.size();
+                if (newCurrentUncoveredCellsSize < currentUncoveredCellsSize) {
+                    subMapOccupancyGrid = tempCombinedGrid;
+                    currentUncoveredCellsSize = newCurrentUncoveredCellsSize;
+                }
+            }
+        }
 
 		currentCoverage = 1 - ((double) currentUncoveredCellsSize) / totalUncoveredCells;
 		if (currentCoverage >= coverageThreshold) {
@@ -1041,7 +1052,7 @@ namespace dpg_slam {
         for(uint32_t i=0; i<Nodes_.size(); i++){
             DpgNode node = Nodes_[i];
 	    // This should be 1s for current pose chain.
-            if (include_inactive_ || node.isNodeActive()) {
+            if (include_inactive_nodes_ || node.isNodeActive()) {
                 convertLaserRangeToCellKey(node);
 	    }
 	}
@@ -1106,7 +1117,7 @@ namespace dpg_slam {
             Vector2f scanPoint = math_utils::transformPoint(point.getPointInLaserFrame(), 0, LaserInMapFrame.first, LaserInMapFrame.second).first;
             uint8_t sector_num = point.getSectorNum();
 
-            if ((include_inactive_) || (scanMeasurementAtNode.isSectorActive(sector_num))) {
+            if ((include_inactive_sectors_) || (scanMeasurementAtNode.isSectorActive(sector_num))) {
                 if ((point.getLabel() == MAX_RANGE) || (include_static_ && (point.getLabel() == PointLabel::STATIC)) ||
                     (include_added_ && (point.getLabel() == PointLabel::ADDED)) || (point.getLabel() == PointLabel::REMOVED)) {
                     cellKey cell = convertToKeyForm(scanPoint);
