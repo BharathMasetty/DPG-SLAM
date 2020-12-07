@@ -56,18 +56,24 @@ namespace dpg_slam {
                                                   true);
                 std::string all_points_file_name = "all_points_grid_pass_" + std::to_string(pass_number_ - 1) +
                         "_" + time_str_ + ".csv";
+
+                ROS_INFO_STREAM("Writing file " << all_points_file_name);
                 all_points_occ_grid.writeToFile(all_points_file_name);
             }
             {
                 occupancyGrid active_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, false, false, true, true);
                 std::string all_active_file_name = "all_active_grid_pass_" + std::to_string(pass_number_ - 1) +
                         "_" + time_str_ + ".csv";
+
+                ROS_INFO_STREAM("Writing file " << all_active_file_name);
                 active_occ_grid.writeToFile(all_active_file_name);
             }
             {
                 occupancyGrid dynamic_occ_grid(dpg_nodes_, dpg_parameters_, pose_graph_parameters_, true, true, true, false);
                 std::string dynamic_grid_file_name = "dynamic_grid_pass_" + std::to_string(pass_number_ - 1) +
                                                                             "_" + time_str_ + ".csv";
+
+                ROS_INFO_STREAM("Writing file " << dynamic_grid_file_name);
                 dynamic_occ_grid.writeToFile(dynamic_grid_file_name);
             }
             {
@@ -75,6 +81,7 @@ namespace dpg_slam {
                                                      true);
                 std::string active_static_file_name = "active_static_grid_pass_" + std::to_string(pass_number_ - 1) +
                         "_" + time_str_ + ".csv";
+                ROS_INFO_STREAM("Writing file " << active_static_file_name);
                 active_static_occ_grid.writeToFile(active_static_file_name);
             }
         }
@@ -142,31 +149,47 @@ namespace dpg_slam {
             bool converged = runIcp(prev_node, curr_node, successive_scan_offset); // TODO should we do anything with output?
             if (!converged) {
                 ROS_ERROR_STREAM("Successive scan alignment didn't converge. Consider changing this to drop that scan");
+            } else {
+                addObservationConstraint(prev_node.getNodeNumber(), curr_node.getNodeNumber(), successive_scan_offset);
             }
-            addObservationConstraint(prev_node.getNodeNumber(), curr_node.getNodeNumber(), successive_scan_offset);
 
             if (pose_graph_parameters_.non_successive_scan_constraints_) {
-                for (size_t j = 0; j < i - 1; j+= 1) {
-                    // TODO consider adding max factors here if reoptimization is too slow, perhaps with a higher max factor count
-                    DpgNode loop_closure_node = dpg_nodes_[j];
+                if (dpg_nodes_.size() > 1) {
+                    int skip_count = 1;
+                    size_t start_num = 0;
+                    int num_added_factors = 0;
+                    if (i > pose_graph_parameters_.factor_evaluation_skip_number_) {
+                        skip_count = pose_graph_parameters_.factor_evaluation_skip_number_ * (1 + pass_number_);
+                        start_num = i % skip_count;
+                    }
+                    for (int run_num = 0; run_num < skip_count; run_num++) {
+                        if (num_added_factors >= pose_graph_parameters_.reoptimization_max_factors_per_node_) {
+                            ROS_INFO_STREAM("Hit max factors");
+                            break;
+                        }
+                        for (size_t j = ((start_num + run_num) % skip_count); j < i - 1; j+= skip_count) {
+                            if (num_added_factors >= pose_graph_parameters_.reoptimization_max_factors_per_node_) {
+                                break;
+                            }
+                            DpgNode loop_closure_node = dpg_nodes_[j];
 
-                    float node_dist = (loop_closure_node.getEstimatedPosition().first -
-                                       curr_node.getEstimatedPosition().first).norm();
-                    float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
-                                                pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_
-                                                                                                                 : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
+                            float node_dist = (loop_closure_node.getEstimatedPosition().first -
+                                    curr_node.getEstimatedPosition().first).norm();
+                            float node_dist_threshold = (loop_closure_node.getPassNumber() == curr_node.getPassNumber()) ?
+                                    pose_graph_parameters_.maximum_node_dist_within_pass_scan_comparison_
+                                    : pose_graph_parameters_.maximum_node_dist_across_passes_scan_comparison_;
 
-                    if (node_dist <= node_dist_threshold) {
-
-                        std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
-                        if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
-                            addObservationConstraint(loop_closure_node.getNodeNumber(), curr_node.getNodeNumber(),
-                                                     non_successive_scan_offset);
+                            if (node_dist <= node_dist_threshold) {
+                                std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+                                if (runIcp(loop_closure_node, curr_node, non_successive_scan_offset)) {
+                                    addObservationConstraint(loop_closure_node.getNodeNumber(),
+                                                             curr_node.getNodeNumber(), non_successive_scan_offset);
+                                }
+                            }
                         }
                     }
                 }
             }
-
         }
         // Get initial estimates for each node based on their current estimated position
         // With the exception of the new node, this will be the estimate from the last GTSAM update
@@ -196,10 +219,11 @@ namespace dpg_slam {
             return;
         }
 
-	if (pass_number_ >= 1) {
-		ROS_INFO_STREAM("DPG Execution Start");
-		executeDPG();
-	}
+
+        if (pass_number_ >= 1 && num_curr_pass_nodes_ > 1) {
+            ROS_INFO_STREAM("DPG Execution Start");
+            executeDPG();
+        }
     }
 
     void DpgSLAM::publishTrajectory(amrl_msgs::VisualizationMsg &vis_msg) {
@@ -319,20 +343,16 @@ namespace dpg_slam {
 
         DpgNode preceding_node = dpg_nodes_.back();
 
-//        ROS_INFO_STREAM("Preceding node pos " << preceding_node.getEstimatedPosition().first.x() << ", " << preceding_node.getEstimatedPosition().first.y() << ", " << preceding_node.getEstimatedPosition().second);
-
         // Add laser factor for previous pose and this node
         std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset;
         bool converged = runIcp(preceding_node, new_node, successive_scan_offset); // TODO should we do anything with output?
         if (!converged) {
             ROS_ERROR_STREAM("Successive scan alignment didn't converge. Consider changing this to drop that scan");
+        } else {
+            addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
         }
-        addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
         // Add constraints for non-successive scans
-        // TODO should we limit how many connections we make here (i.e. if we connect 2 and 8,
-        //  don't also connect 3 and 8?)
-
         if (pose_graph_parameters_.non_successive_scan_constraints_) {
             if (dpg_nodes_.size() > 1) {
                 int skip_count = 1;
@@ -681,12 +701,13 @@ namespace dpg_slam {
 	
 	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = currPoseChainGrids.back().second.getGridInfo();
 	cells_to_plot_.clear();
-	for (const auto &[cell, val] : gridinfo) {
-		cells_to_plot_.emplace_back(cell.first*0.10, cell.second*0.10);
+	for (const auto nodegrid : currPoseChainGrids) {
+		std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = nodegrid.second.getGridInfo();
+		for (const auto &[cell, val] : gridinfo) {
+			cells_to_plot_.emplace_back(cell.first*dpg_parameters_.occ_grid_resolution_, cell.second*dpg_parameters_.occ_grid_resolution_);
+		}
 	}
-	
-	ROS_INFO_STREAM("Occupancy Grids Created for Current Pose Chain Nodes, size: " << currPoseChainGrids.size());
-	
+
         // Grid for FOV nodes
         occupancyGrid localSubMapGrid = getSubMapCoveringCurrPoseChain(currPoseChain, currPoseChainGrids);
 	ROS_INFO_STREAM("Local Submap created!");
@@ -694,7 +715,7 @@ namespace dpg_slam {
 	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo2 = localSubMapGrid.getGridInfo();
 	submap_cells_to_plot_.clear();
         for (const auto &[cell, val] : gridinfo2) {
-                submap_cells_to_plot_.emplace_back(cell.first*0.10, cell.second*0.10);
+                submap_cells_to_plot_.emplace_back(cell.first*dpg_parameters_.occ_grid_resolution_, cell.second*dpg_parameters_.occ_grid_resolution_);
         }
 	ROS_INFO_STREAM("submap points for visualization are stored!");
 		
