@@ -34,8 +34,8 @@ namespace dpg_slam {
     public:
 
         // TODO set the rest of the params, maybe make them loadable via rosparam server
-        DpgParameters() : num_sectors_(kDefaultNumSectors){
-
+        DpgParameters(ros::NodeHandle &node_handle) : num_sectors_(kDefaultNumSectors) {
+            node_handle.param(kDeltaChangeThresholdParamName, delta_change_threshold_, kDefaultDeltaChangeThreshold);
         }
 
         /**
@@ -62,9 +62,19 @@ namespace dpg_slam {
         uint16_t num_bins_for_change_detection_ = 10;
 
         /**
+         * ROS param name for the ratio of changed bins to total bins for a node to be considered changed.
+         */
+        static constexpr const char *kDeltaChangeThresholdParamName = "delta_change_threshold";
+
+        /**
+         * Default value for the ratio of changed bins to total bins for a node to be considered changed.
+         */
+        const double kDefaultDeltaChangeThreshold = 0.1;
+
+        /**
          * Ratio of changed bins to total bins for a node to be considered changed.
          */
-        double delta_change_threshold_ = 0.0;
+        double delta_change_threshold_;
 
         /**
          * How much of the current pose graph must be covered by FOVs of the the local submap nodes.

@@ -88,6 +88,8 @@ void setGdcRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelRotErrorFromTranslParamName, 0.4);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.4);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMinDistBetweenNodesParamName, 1.0);
+
+    node_handle.setParam(dpg_slam::DpgParameters::kDeltaChangeThresholdParamName, 0.1);
 }
 
 /**
@@ -120,6 +122,8 @@ void setMitRosParams(ros::NodeHandle &node_handle) {
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMotionModelTranslErrorFromRotParamName, 0.2);
     node_handle.setParam(dpg_slam::PoseGraphParameters::kMinDistBetweenNodesParamName, 2.0);
 
+    node_handle.setParam(dpg_slam::DpgParameters::kDeltaChangeThresholdParamName, 0.2);
+
 //
 //    downsample_icp_points: 2
 //    max_obs_factors_per_node: 200
@@ -151,14 +155,14 @@ void runOnGdcRosBags() {
 
 void runOnMitRosBags() {
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run1__1_25_2009___18_50_b21.bag"), 2, 25);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.8, 40, 300);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.45,4, 270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.4,15, 285);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.35,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.3,2,310);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.25,2,240);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.2,2,270);
-    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.15,2,290);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run2__1_19_2009___2_29_b21.bag"), 0.3, 40, 300);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run3__3_19_2009___0_7_b21.bag"), 0.4,4, 270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run4__1_25_2009___19_4_b21.bag"), 0.2,15, 285);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run5__3_19_2009___0_28_b21.bag"), 0.15,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run6__1_25_2009___19_49_b21.bag"), 0.15,2,310);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run7__1_25_2009___20_12_b21.bag"), 0.15,2,240);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run8__3_19_2009___1_8_b21.bag"), 0.1,2,270);
+    playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run9__3_19_2009___1_17_b21.bag"), 0.1,2,290);
     playRosbag(getBagPath(FLAGS_mit_dataset_folder, "run10__3_19_2009___1_28_b21.bag"), 0.1,2,280);
 
 

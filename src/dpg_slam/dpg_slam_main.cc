@@ -311,7 +311,7 @@ int main(int argc, char** argv) {
 
   // TODO actually initialize params
   dpg_slam::PoseGraphParameters pose_graph_params(n);
-  dpg_slam::DpgParameters dpg_params;
+  dpg_slam::DpgParameters dpg_params(n);
   dpg_slam::VisualizationParams visualization_params;
 
 

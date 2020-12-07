@@ -50,24 +50,28 @@ namespace dpg_slam {
     
     // Constructor without any nodes 
     occupancyGrid(const DpgParameters &dpg_parameters, const PoseGraphParameters &pose_graph_parameters) :
-	      dpg_parameters_(dpg_parameters), pose_graph_parameters_(pose_graph_parameters),min_cell_x_(INT_MAX), 
-	      max_cell_x_(INT_MIN), min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), 
-	      include_added_(true), include_static_(true) {}	    
+	      dpg_parameters_(dpg_parameters), pose_graph_parameters_(pose_graph_parameters),min_cell_x_(INT_MAX),
+	      max_cell_x_(INT_MIN), min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_nodes_(false),
+	      include_inactive_sectors_(true),
+	      include_added_(true), include_static_(true) {}
  
     // Constructor for combining two occupancy grids.
     occupancyGrid(const occupancyGrid &grid1, const occupancyGrid &grid2, const DpgParameters &dpg_parameters, 
-	      const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
+	      const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters),
     	      pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
-               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_nodes_(false),
+                                                              include_inactive_sectors_(true),
+                                                              include_added_(true),
 	       include_static_(true) {
  	combineOccupancyGrids(grid1, grid2);
     }	
     
     // Constructor for creating an occupancygrid with just one node.
     occupancyGrid(const DpgNode &current_node, const DpgParameters &dpg_parameters,
-	       const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters), 
+	       const PoseGraphParameters &pose_graph_parameters) : dpg_parameters_(dpg_parameters),
      	       pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
-               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), 
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_nodes_(false),
+                                                               include_inactive_sectors_(true),include_added_(true),
 	       include_static_(true) {
 	Nodes_.push_back(current_node);
 	calculateOccupancyGrid();
@@ -76,7 +80,9 @@ namespace dpg_slam {
     occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
                const PoseGraphParameters &pose_graph_parameters) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
                pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
-               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(false), include_added_(true), include_static_(true) {
+               min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_nodes_(false),
+                                                                   include_inactive_sectors_(true),
+                                                                   include_added_(true), include_static_(true) {
         calculateOccupancyGrid();
     }
     
@@ -92,10 +98,10 @@ namespace dpg_slam {
      * @param include_static            Set to true if the occupancy grid should include static points.
      */
     occupancyGrid(const std::vector<DpgNode> &Nodes, const DpgParameters &dpg_parameters,
-                  const PoseGraphParameters &pose_graph_parameters, const bool include_inactive,
+                  const PoseGraphParameters &pose_graph_parameters, const bool include_inactive_nodes, const bool include_inactive_sectors,
                   const bool include_added, const bool include_static) : Nodes_(Nodes), dpg_parameters_(dpg_parameters),
                   pose_graph_parameters_(pose_graph_parameters), min_cell_x_(INT_MAX), max_cell_x_(INT_MIN),
-                  min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_(include_inactive),
+                  min_cell_y_(INT_MAX), max_cell_y_(INT_MIN), include_inactive_nodes_(include_inactive_nodes), include_inactive_sectors_(include_inactive_sectors),
                   include_added_(include_added), include_static_(include_static) {
         calculateOccupancyGrid();
     }
@@ -255,10 +261,16 @@ namespace dpg_slam {
         int max_cell_y_;
 
         /**
-         * Set to true if the occupancy grid should include inactive (including removed) points, false if it should
-         * only include things that would be in the active map.
+         * Set to true if the occupancy grid should include points from inactive nodes, false if it should only include
+         * points from active nodes.
          */
-        bool include_inactive_;
+        bool include_inactive_nodes_;
+
+        /**
+         * Set to true if the occupancy grid should include points from inactive sectors, false if it should only
+         * include points from active sectors.
+         */
+        bool include_inactive_sectors_;
 
         /**
          * Set to true if the occupancy grid should include added points.
