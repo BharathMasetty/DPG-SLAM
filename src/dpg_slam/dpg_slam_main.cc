@@ -152,13 +152,13 @@ void PublishMap() {
     visualization::DrawPoint(p+activeMapOffset, 0x34b4eb, vis_msg_);
   }
   for (const Vector2f& p : active_added_points) {
-    visualization::DrawPoint(p+activeMapOffset, 0x34eb4c, vis_msg_);
+    visualization::DrawPoint(p+activeMapOffset, 0xa569bd, vis_msg_);
   }
   for (const Vector2f& p : dynamic_added_points) {
-    visualization::DrawPoint(p+dynamicMapOffset, 0xeb34d2, vis_msg_);
+    visualization::DrawPoint(p+dynamicMapOffset, 0x27ae60, vis_msg_);
   }
   for (const Vector2f& p : dynamic_removed_points) {
-    visualization::DrawPoint(p+dynamicMapOffset, 0xeb3443, vis_msg_);
+    visualization::DrawPoint(p+dynamicMapOffset, 0xc0392b, vis_msg_);
   }
   for (const Vector2f& p : cells_to_plot) {
     visualization::DrawPoint(p, 0x34b4eb, vis_msg_);

@@ -55,7 +55,7 @@ namespace dpg_slam {
         /**
          * Number of nodes that should be in the current pose chain.
          */
-        uint8_t current_pose_chain_len_ =  5;
+        uint8_t current_pose_chain_len_ = 3;
 
 	/**
          * Number of bins used for change detection.
@@ -100,7 +100,7 @@ namespace dpg_slam {
         /**
          * Minimum percent of sectors that have to be active for a node to be active.
          */
-        float minimum_percent_active_sectors_ = 0.80;
+        float minimum_percent_active_sectors_ = 0.20;
 
 	/**
 	 * Proximity from nodes in current pose chain to search for submap nodes.

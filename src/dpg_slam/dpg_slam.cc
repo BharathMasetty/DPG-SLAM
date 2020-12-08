@@ -5,6 +5,8 @@
 #include <ros/ros.h>
 #include <unordered_set>
 #include <gtsam/nonlinear/ISAM2.h>
+#include<iterator>
+#include<algorithm> 
 #include <fstream>
 
 #include<iterator>
@@ -687,7 +689,7 @@ namespace dpg_slam {
         // Grid of current Pose chain
         std::vector<DpgNode> currPoseChain;
         uint32_t maxNumNodes = dpg_parameters_.current_pose_chain_len_;
-	uint32_t numNodesInCurrPoseChain = std::min(maxNumNodes, num_curr_pass_nodes_);
+	uint32_t numNodesInCurrPoseChain = std::min(maxNumNodes, num_curr_pass_nodes_- 1);
 	currPoseChain.assign(dpg_nodes_.end() - numNodesInCurrPoseChain, dpg_nodes_.end());
 
 	ROS_INFO_STREAM("Current Pose Chain Created, size: " << currPoseChain.size());
@@ -698,8 +700,9 @@ namespace dpg_slam {
 	    DpgNode currNode = currPoseChain[i];
 	    currPoseChainGrids.emplace_back(std::make_pair(currNode.getNodeNumber(), occupancyGrid(currNode, dpg_parameters_, pose_graph_parameters_)));
 	}
-	
-	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = currPoseChainGrids.back().second.getGridInfo();
+ 	
+	/*	
+	// entire curr pose occ grid.
 	cells_to_plot_.clear();
 	for (const auto nodegrid : currPoseChainGrids) {
 		std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo = nodegrid.second.getGridInfo();
@@ -707,18 +710,22 @@ namespace dpg_slam {
 			cells_to_plot_.emplace_back(cell.first*dpg_parameters_.occ_grid_resolution_, cell.second*dpg_parameters_.occ_grid_resolution_);
 		}
 	}
+	*/
 
+	
         // Grid for FOV nodes
         occupancyGrid localSubMapGrid = getSubMapCoveringCurrPoseChain(currPoseChain, currPoseChainGrids);
 	ROS_INFO_STREAM("Local Submap created!");
-
+	
+	/*
 	std::unordered_map<cellKey, CellStatus, boost::hash<cellKey>> gridinfo2 = localSubMapGrid.getGridInfo();
 	submap_cells_to_plot_.clear();
         for (const auto &[cell, val] : gridinfo2) {
-                submap_cells_to_plot_.emplace_back(cell.first*dpg_parameters_.occ_grid_resolution_, cell.second*dpg_parameters_.occ_grid_resolution_);
+                submap_cells_to_plot_.emplace_back(cell.first*0.dpg_parameters_.occ_grid_resolution_, cell.second*dpg_parameters_.occ_grid_resolution_);
         }
 	ROS_INFO_STREAM("submap points for visualization are stored!");
-		
+	*/
+
 	return std::make_pair(currPoseChainGrids, localSubMapGrid);
     }
     
@@ -739,8 +746,6 @@ namespace dpg_slam {
 	uint64_t totalUncoveredCells = currentUncoveredCells.size();
 	uint64_t currentUncoveredCellsSize  = currentUncoveredCells.size();
 
-	ROS_INFO_STREAM("Uncovered Cells for current Pose chain : " << currentUncoveredCellsSize);
-	
 	// compute submap that covers the currentUncoveredCells
 	// Get max laser range
 	float proximityThreshold = dpg_parameters_.distance_threshold_for_local_submap_nodes_;
@@ -811,7 +816,9 @@ namespace dpg_slam {
 	}
 
 	if (!isThresholdMet) { 
-		ROS_ERROR_STREAM("Threshold could not be achieved in submap coverage, current coverange: " << currentCoverage);
+		ROS_ERROR_STREAM("WARNING: Threshold could not be achieved in submap coverage, current coverange: " << currentCoverage);
+		ROS_ERROR_STREAM("SUGGESTION: Try to turn down the play back speed!");
+		ROS_ERROR_STREAM("SUGGESTION: Try to turn down node deactivation threshold!");
 	}
 	return subMapOccupancyGrid;
     } 
@@ -822,7 +829,6 @@ namespace dpg_slam {
 	std::vector<cellKey> cellsToBeDeleted;
 	for (const auto& uncoveredCell : currentUncoveredCells) {
 		if(subMapGridInfo.find(uncoveredCell) != subMapGridInfo.end()) {
-			//ROS_INFO_STREAM("Found An intersection");
 			// if the key exists in local submap- erase from uncovered cells set.
 			cellsToBeDeleted.push_back(uncoveredCell);
 			//currentUncoveredCells.erase(uncoveredCell);
@@ -831,15 +837,12 @@ namespace dpg_slam {
 	for (const auto& cell : cellsToBeDeleted) {
 		currentUncoveredCells.erase(cell);
 	}
-	
-	ROS_INFO_STREAM("Uncovered Cells for current Pose chain : " << currentUncoveredCells.size());
     }
 
     void DpgSLAM::detectAndLabelChangesForCurrentPoseChain(const std::vector<std::pair<uint64_t, occupancyGrid>> &current_submap_occ_grids,
                                                            const occupancyGrid &local_submap_occ_grid,
                                                            std::vector<PointIdInfo> &removed_points) {
         
-	ROS_INFO_STREAM("Detect and label changes for current pose chain entered");    
 	std::vector<PointIdInfo> added_points;
         std::vector<PointIdInfo> removed_points_non_deduped;
 
@@ -849,14 +852,13 @@ namespace dpg_slam {
         }
 	
 	if (added_points.size()+removed_points_non_deduped.size() == 0)
-		ROS_ERROR_STREAM("CHanges are not being commited for any of the nodes, reduce bin score threshold");
+		ROS_ERROR_STREAM("Warning: Changes are not being commited for any of the nodes, reduce bin score threshold");
 
-	ROS_INFO_STREAM("In Detect and Label changes:: Added Points :: " << added_points.size() << " Removed Points :: "  << removed_points_non_deduped.size());
+	ROS_INFO_STREAM("In Detect and Label changes: Added Points = " << added_points.size() << " Removed Points = "  << removed_points_non_deduped.size());
 
         for (const PointIdInfo &added_point : added_points) {
             dpg_nodes_[added_point.node_num_].setPointLabel(added_point.point_num_in_node_, ADDED);
         }
-	ROS_INFO_STREAM("Added Points are labeled");
 
         std::unordered_map<uint64_t, std::unordered_set<uint64_t>> removed_by_node_num;
         for (const PointIdInfo &removed_point : removed_points_non_deduped) {
@@ -865,16 +867,13 @@ namespace dpg_slam {
             }
             removed_by_node_num[removed_point.node_num_].insert(removed_point.point_num_in_node_);
         }
-	ROS_INFO_STREAM("removed by node_num are identified.");
-
-        for (const auto &removed_for_node : removed_by_node_num) {
+        
+	for (const auto &removed_for_node : removed_by_node_num) {
             for (const uint64_t &removed_index : removed_for_node.second) {
                 dpg_nodes_[removed_for_node.first].setPointLabel(removed_index, REMOVED);
                 removed_points.emplace_back(PointIdInfo(removed_for_node.first, removed_index));
             }
         }
-	ROS_INFO_STREAM("Removed Points are labeled");
-	ROS_INFO_STREAM("Detected Changes are Labeled!");
     }
 
      void DpgSLAM::detectAndLabelChangesForCurrentNode(
@@ -883,8 +882,6 @@ namespace dpg_slam {
             std::vector<PointIdInfo> &added_points,
             std::vector<PointIdInfo> &removed_points) {
 	
-	 ROS_INFO_STREAM("Detect And label changes for NODE entered");	
-      	     
 	 std::vector<PointIdInfo> added_points_at_current_node;
 	 std::vector<PointIdInfo> removed_points_at_current_node;
 	 bool commitChanges = false;
@@ -906,14 +903,13 @@ namespace dpg_slam {
 									   removed_points_at_current_node);
 	 }
 	 if (!commitChanges) {
-		ROS_INFO_STREAM("Changes are not commited for current pose chain node.");
+		ROS_INFO_STREAM("Warning: Changes are not commited for current pose chain node.");
 		 return;
 	 }
 
 	 // commit changes if we get here.
 	 added_points.insert(added_points.end(), added_points_at_current_node.begin(), added_points_at_current_node.end());
 	 removed_points.insert(removed_points.end(), removed_points_at_current_node.begin(), removed_points_at_current_node.end());
-	 ROS_INFO_STREAM("Detect and label exiting");
     }
 
     bool DpgSLAM::computeBinScoreAndCommitLabelsForNode(const uint64_t &curr_node_num, const std::vector<PointIdInfo> &added_points,
@@ -926,7 +922,7 @@ namespace dpg_slam {
 	 double current_changed_ratio = 0.0;
 	 std::vector<PointIdInfo> changedPoints = added_points;
 	 changedPoints.insert(changedPoints.end(), removed_points.begin(), removed_points.end());
-    DpgNode curr_pose_chain_node = dpg_nodes_[curr_node_num];
+    	 DpgNode curr_pose_chain_node = dpg_nodes_[curr_node_num];
 
 	 std::pair<Eigen::Vector2f, float> curr_node_info =  curr_pose_chain_node.getEstimatedPosition();
 	 Measurement curr_node_measurement = curr_pose_chain_node.getMeasurement();
@@ -936,7 +932,6 @@ namespace dpg_slam {
 	 std::pair<Vector2f, float> curr_lidar_in_map = math_utils::transformPoint(getLaserPositionRelativeToBaselink().first, getLaserPositionRelativeToBaselink().second,
 			 							 curr_node_info.first, curr_node_info.second);
 	
-	 ROS_INFO_STREAM("IN CHANGED POINTS :: CHANGED POINTS SIZE = " << changedPoints.size());
 	 for(const PointIdInfo& point : changedPoints) {
 		DpgNode node = dpg_nodes_[point.node_num_];
 
@@ -957,16 +952,15 @@ namespace dpg_slam {
 			ROS_ERROR_STREAM("Invalid Angle == " << angle_rel_curr_node << " min :  " << angle_min << "  max " << angle_max);
         		continue;
     		}
-
 		uint16_t binNumber = (angle_rel_curr_node - angle_min) / bin_increment;
 		changedBins.insert(binNumber);
-		current_changed_ratio = changedBins.size()/totalBins;
+		current_changed_ratio = ((double)changedBins.size())/totalBins;
 		if (current_changed_ratio >= change_threshold) {
 			commitChanges = true;
 			break;
 		}	
 	 }
-	 ROS_INFO_STREAM("NumCHnagedBins = " << changedBins.size());
+	 ROS_INFO_STREAM("changedBins at current node = " << current_changed_ratio);
 	 if (changedBins.size() == 0) 
 		 ROS_ERROR_STREAM("WARNING: changed Bins = 0");
 
@@ -1026,8 +1020,7 @@ namespace dpg_slam {
 	active_added_points_ = active_added_points;
 	dynamic_removed_points_ = dynamic_removed_points;
 	dynamic_added_points_ = dynamic_added_points;
-
-}
+   }
 
     void DpgSLAM::updateNodesAndSectorStatus(const std::vector<PointIdInfo> &removedPoints) {
    		
@@ -1046,12 +1039,10 @@ namespace dpg_slam {
 		removedVector[i] = pointInMapFrame;
 	   }
 		
-	   ROS_INFO_STREAM("Points to be deactivated are calculated in map frame");
 	   float min_frac_sectors_active = dpg_parameters_.minimum_percent_active_sectors_; 
 	   for (uint32_t i=0; i<(dpg_nodes_.size()-num_curr_pass_nodes_); i++) {
 	   	dpg_nodes_[i].deactivateIntersectingSectors(removedVector, min_frac_sectors_active); 	
 	   } 
-	   ROS_INFO_STREAM("Sectors and nodes are deactivated");
     }
 
     void occupancyGrid::writeToFile(const std::string &file_name) {
@@ -1134,8 +1125,6 @@ namespace dpg_slam {
         float LaserX = pose_graph_parameters_.laser_x_in_bl_frame_;
         float LaserY = pose_graph_parameters_.laser_y_in_bl_frame_;
 
-
-	ROS_INFO_STREAM("Node location for current occupancy Grid : " << nodePosition.x() << " " << nodePosition.y());
         std::pair<Vector2f, float> LaserInMapFrame =
                 math_utils::transformPoint(Vector2f(LaserX, LaserY),
                                            pose_graph_parameters_.laser_orientation_rel_bl_frame_,
