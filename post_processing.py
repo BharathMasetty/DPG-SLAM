@@ -9,26 +9,31 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import glob
+import re
 number_passes = 10
 
 #%% This part of the code is just for loading data and creating arrays 
 path = r"C:\Users\Kunal Nalamwar\Desktop\project\data_GDC\Active map points GDC" # use your path
 all_csv_files_active_map = glob.glob(path + "/*.csv")
-all_csv_files_active_map.sort()
+all_csv_files_active_map = sorted(all_csv_files_active_map, key=lambda x:float(re.findall("(\d+)",x)[0]))
+
 
 path1 = r"C:\Users\Kunal Nalamwar\Desktop\project\data_GDC\Active-Static map points GDC" # use your path
 all_csv_files_active_static_map = glob.glob(path1 + "/*.csv")
-all_csv_files_active_static_map.sort()
+all_csv_files_active_static_map = sorted(all_csv_files_active_static_map, key=lambda x:float(re.findall("(\d+)",x)[0]))
+
 
 path2 = r"C:\Users\Kunal Nalamwar\Desktop\project\data_GDC\Dynamic grid map points GDC" # use your path
 all_csv_files_dynamic_map = glob.glob(path2 + "/*.csv")
-all_csv_files_dynamic_map.sort()
+all_csv_files_dynamic_map = sorted(all_csv_files_dynamic_map, key=lambda x:float(re.findall("(\d+)",x)[0]))
+
 
 path3 = r"C:\Users\Kunal Nalamwar\Desktop\project\data_GDC\Pose graph SLAM GDC" # use your path
 all_csv_files_pose_graph_map = glob.glob(path3 + "/*.csv")
-all_csv_files_pose_graph_map.sort()
+all_csv_files_pose_graph_map = sorted(all_csv_files_pose_graph_map, key=lambda x:float(re.findall("(\d+)",x)[0]))
 
-ground_truth = pd.read_csv('ground_truth.csv', index_col=None, header=0, skiprows=1 , usecols=[0,1,2]).to_numpy()
+
+ground_truth = pd.read_csv('all_points_ground_truth_gdc.csv', index_col=None, header=0, skiprows=1 , usecols=[0,1,2]).to_numpy()
 
 
 obj = [[] for i in range(number_passes)]
@@ -67,9 +72,9 @@ for k in range(0,number_passes):
             active_map_points = active_map_points + 1 
     print(active_map_points)
     points_percent_GT_active_static.append(matched_points/active_map_points*100)
-'''    
+'''  
 points_percent_GT_baseline = []
-for k in range(1,9):
+for k in range(0,number_passes):
     one = ground_truth
     two = np.asarray(obj3[k]).reshape(np.shape(obj3[k])[1],np.shape(obj3[k])[2])
     matched_points = 0
@@ -87,7 +92,7 @@ for k in range(1,9):
 
 points_percent_GT_dynamic = []
 points_percent_dynamic_GT = []
-for k in range(1,9):
+for k in range(0,number_passes):
     one = ground_truth
     two = np.asarray(obj[k]).reshape(np.shape(obj[k])[1],np.shape(obj[k])[2])
     matched_points = 0
@@ -117,20 +122,20 @@ plt.figure(2)
 plt.title('Ground Truth coverage of baseline', size = 20)
 plt.xlabel('pass number', size = 15)
 plt.ylabel('percentage matched points', size = 15)
-plt.plot(np.arange(1,9),points_percent_GT_baseline)
+plt.plot(np.arange(0,number_passes),points_percent_GT_baseline)
 plt.show()
 
 plt.figure(3)
 plt.title('Ground truth coverage of dynamic points', size = 20)
 plt.xlabel('pass number', size = 15)
 plt.ylabel('percentage matched points', size = 15)
-plt.plot(np.arange(1,9),points_percent_GT_dynamic)
+plt.plot(np.arange(0,number_passes),points_percent_GT_dynamic)
 plt.show()
 
 plt.figure(4)
 plt.title('Dynamic points coverage of ground truth', size = 20)
 plt.xlabel('pass number', size = 15)
 plt.ylabel('percentage matched points', size = 15)
-plt.plot(np.arange(1,9),points_percent_dynamic_GT)
+plt.plot(np.arange(0,number_passes),points_percent_dynamic_GT)
 plt.show()
 '''
